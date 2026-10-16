@@ -188,7 +188,7 @@ function scheduleAction(action,payload,operation){
  return {queued:true,id};
 }
 function csvExport(){
- const fields=kind==='screenshots'?LOCAL_FIELDS.filter(k=>k!=='impact'):LOCAL_FIELDS;
+ const fields=LOCAL_FIELDS.filter(k=>k!=='machine'&&(kind!=='screenshots'||k!=='impact'));
  const headers=['ID',...fields.map(k=>fieldLabel(k)),'Status','Source files','Import problems'],rows=[headers];
  for(const record of displayedRecords())rows.push([record.id,...fields.map(k=>record[k]||''),record.review,record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
  const quote=value=>{let text=String(value??'');if(/^[=+\-@\t\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';};
@@ -196,7 +196,7 @@ function csvExport(){
 }
 
 async function localApi(route,body){
- if(route==='state')return new Response(JSON.stringify({records:groupedEvents(),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · use Back up database to save a portable copy.'}));
+ if(route==='state')return new Response(JSON.stringify({records:groupedEvents(),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Export Report saves both tables to Excel.'}));
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');
@@ -243,8 +243,8 @@ async function initStandalone(){
   await openLocalDatabase();
   $('reports').readOnly=true;$('screenshots').readOnly=true;
   $('reports').placeholder='Choose the service-report folder…';$('screenshots').placeholder='Choose the screenshot folder…';
-  $('excel').textContent='Export CSV';
-  $('database-path').textContent='Database stored in this browser. Save regular JSON backups.';
+  $('excel').textContent='Export Report';
+  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves hourly.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
   await poll();await initExcelSync();setInterval(poll,2000);
  }catch(e){notice('Browser database unavailable: '+(e.message||e)+'. Open the file in a regular Edge or Chrome window with browser storage enabled.',true);}

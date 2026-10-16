@@ -17,8 +17,7 @@ runtime=(root/'standalone/browser-runtime.js').read_text()+'\n'+(root/'standalon
 page=(root/'index.html').read_text()
 page=page.replace('Local database · files stay on this computer','Local HTML · offline')
 page=page.replace('Select folders on this computer or a mapped network drive. Existing files are included.','Use Edge or Chrome to choose two folders. This HTML runs offline; no launcher or server is needed.')
-page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. Save regular database backups.')
-page=page.replace('<button id="backup">Back up database</button>','<button id="backup">Back up database</button><button id="restore">Restore database</button><input type="file" id="restore-file" accept=".json,application/json" hidden>')
+page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. The connected Export Report is saved after changes and re-saved hourly while this page is open.')
 start=page.index('async function api(path,body){')
 end=page.index('\nasync function command(',start)
 page=page[:start]+'async function api(path,body){return localApi(path,body);}'+page[end:]
@@ -27,8 +26,6 @@ page=page.replace("await download('excel','TrueBeam Service Log.xlsx');","await 
 page=page.replace("notice('Downloading the latest completed Excel export. Entries from a scan in progress will appear in the next export.');","notice('Downloading a CSV of the selected tab.');")
 page=page.replace("download('backup','TrueBeam Service Log.sqlite3')","download('backup','TrueBeam Database Backup.json')")
 page=page.replace("if(location.protocol==='file:'||!token){$('launcher').hidden=false;$('workspace').hidden=true;}else{poll();setInterval(poll,2000);}","""$('launcher').hidden=true;$('workspace').hidden=false;
-$('restore').onclick=()=>$('restore-file').click();
-$('restore-file').onchange=async event=>{const file=event.target.files[0];if(file){try{await restoreStandalone(file);}catch(e){notice(e.message||String(e),true);}event.target.value='';}};
 initStandalone();""")
 marker="<script>\n'use strict';"
 def script_text(value):return value.replace('</script','<\\/script')
