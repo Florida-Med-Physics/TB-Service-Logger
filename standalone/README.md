@@ -77,3 +77,5 @@ Updates save automatically within about two seconds after imports, edits, duplic
 The top Export Report button saves the connected Excel workbook immediately. It also saves after changes and re-saves every hour while the page is open; background browser throttling or computer sleep may delay that save. Backup and restore controls have been removed. Fault Reports omit the Machine column.
 
 Tables fit the available width without lateral scrolling. On narrow screens entries use a stacked layout. Edit short fields directly; click a description preview to read and edit the full text in a pop-up. Changes save when leaving a field. Fault Reports has individual Screenshot links for each original source; service reports have source report links. Reconnect source folders and scan if browser source access needs renewal. The separate Review button has been removed.
+
+Table values display as plain text, with secondary details and status badges. Click a short value to edit it; leave the field or press Enter to save, or Escape to cancel. Longer descriptions open in the full-text pop-up. Input controls appear only while editing.

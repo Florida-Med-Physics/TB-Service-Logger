@@ -63,6 +63,12 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 /* Fit all report columns to the available page width. */
 .table-wrap{overflow-x:hidden}table{min-width:0;table-layout:fixed}th,td{padding:10px 7px;overflow-wrap:anywhere;white-space:normal}th{font-size:10px;letter-spacing:.15px}.sort-column{white-space:normal;text-align:left}.inline-group{min-width:0;gap:6px}.inline-field{min-width:0;width:100%;padding:4px;font-size:11px}.inline-label{font-size:9px;overflow-wrap:anywhere}.source-links{min-width:0;max-width:100%;font-size:10px}.text-preview{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;width:100%;max-height:5.5em;padding:3px;border:0;text-align:left;background:transparent;font-size:12px;color:var(--ink);white-space:normal;overflow-wrap:anywhere}.text-preview:hover{text-decoration:underline;text-underline-offset:3px}#text-detail{max-width:850px}#text-detail textarea.inline-field{min-width:0;min-height:300px;font-size:14px;line-height:1.6;border:1px solid var(--line)}#text-detail .inline-label{font-size:12px}
 @media(max-width:760px){.table-wrap{max-height:none}table,tbody,tr,td{display:block;width:100%}thead{display:none}tbody tr{padding:12px;border-bottom:2px solid var(--line)}td{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;border:0}td::before{content:attr(data-label);font-weight:650;font-size:11px;color:var(--muted)}.inline-field{font-size:12px}.source-links{font-size:12px}}
+
+.editable-value,[data-theme="dark"] .editable-value{display:block;max-width:100%;padding:0;border:0;border-radius:2px;background:transparent;color:var(--ink);text-align:left;font-size:12px;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.editable-value:hover,[data-theme="dark"] .editable-value:hover{background:transparent;text-decoration:underline;text-decoration-color:#fa7021;text-underline-offset:4px}
+.editable-value.secondary{font-size:11px;color:var(--muted);margin-top:2px}.editable-value.code{font:600 13px Consolas,monospace;color:var(--navy)}
+.editable-value.badge{display:inline-block;background:var(--blue);padding:3px 7px;font-size:11px}[data-theme="dark"] .editable-value.code{color:#a1d6fb}[data-theme="dark"] .editable-value.badge{background:var(--blue)}
+.inline-group{gap:3px}.inline-group .inline-field{border:1px solid var(--line);background:var(--pale);font-size:12px}
 </style>
 </head>
 <body>
@@ -172,6 +178,19 @@ function inlineField(record,field,expanded=false){
    $('text-detail-body').replaceChildren(inlineField(record,field,true));dialog.querySelector('h2').textContent=fieldLabel(field,record.kind);dialog.showModal();
   };return button;
  }
+ if(!expanded){
+  const secondary=['machine_release','case_number','additional_codes','severity','work_hours','downtime_hours','service_status'].includes(field);
+  const prefix={machine_release:'Release: ',case_number:'Case ',additional_codes:'Other: ',work_hours:'Work hrs: ',downtime_hours:'Downtime hrs: '}[field]||'';
+  const text=record[field]?prefix+record[field]:'—';
+  const button=el('button',text,'editable-value'+(secondary?' secondary':'')+(['fault_code','additional_codes'].includes(field)?' code':'')+(field==='review'?' badge':''));
+  button.type='button';button.title='Edit '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Edit '+fieldLabel(field,record.kind)+' for entry '+record.id);
+  button.onclick=()=>{
+   const editor=inlineField(record,field,true),input=editor.querySelector('.inline-field');
+   editor.querySelector('label').hidden=true;button.replaceWith(editor);input.focus();if(input.select)input.select();
+   input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();input.blur();}else if(event.key==='Escape'){input.value=record[field]||'';editor.replaceWith(inlineField(record,field));}};
+   input.onblur=()=>{if(input.value===(record[field]||''))editor.replaceWith(inlineField(record,field));};
+  };return button;
+ }
  const wrap=el('div'),label=el('label',fieldLabel(field,record.kind),'inline-label');
  const input=el(field==='review'?'select':long?'textarea':'input',undefined,'inline-field');
  input.id='inline-'+record.id+'-'+field;input.dataset.field=field;input.dataset.recordId=record.id;label.htmlFor=input.id;
@@ -186,7 +205,7 @@ function inlineField(record,field,expanded=false){
    else await command('update',{...record,[field]:value});
    record[field]=value;input.setCustomValidity('');input.title='Saved';notice('Entry '+record.id+' saved.');await poll();
   }catch(error){input.setCustomValidity('Save failed');input.title=error.message;notice('Could not save entry '+record.id+': '+error.message,true);}
-  finally{input.removeAttribute('aria-busy');}
+  finally{input.removeAttribute('aria-busy');if(!long&&!input.validationMessage)wrap.replaceWith(inlineField(record,field));}
  };
  wrap.append(label,input);return wrap;
 }
