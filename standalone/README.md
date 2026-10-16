@@ -65,3 +65,5 @@ The optional Python/server implementation remains available separately in the re
 
 
 Folder settings open in a pop-up, with separate rows for service reports and screenshots. Use Done to return to the tables. Click a column heading or use Sort by to arrange entries, including start/release date, category, and work hours. Each tab remembers its sort preference. Download fault table and Download service table save Excel-compatible CSV files containing the current filtered rows in the displayed order. The appearance uses the UFHPTI Physics Scheduler logo, navy, and orange branding; dark mode remains available.
+
+Fault Reports show Error Details, Solution (the suggestions extracted from the source), and Worker Solution (the work performed, editable in Review). These columns are included in downloads. Existing saved work is retained.
