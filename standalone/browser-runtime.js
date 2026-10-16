@@ -189,7 +189,7 @@ function scheduleAction(action,payload,operation){
 }
 function csvExport(){
  const headers=['ID',...LOCAL_FIELDS,'Review','Source files','Import problems'],rows=[headers];
- for(const record of groupedEvents().filter(r=>r.kind===kind))rows.push([record.id,...LOCAL_FIELDS.map(k=>record[k]||''),record.review,record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
+ for(const record of displayedRecords())rows.push([record.id,...LOCAL_FIELDS.map(k=>record[k]||''),record.review,record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
  const quote=value=>{let text=String(value??'');if(/^[=+\-@\t\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';};
  return '\ufeff'+rows.map(row=>row.map(quote).join(',')).join('\r\n');
 }
