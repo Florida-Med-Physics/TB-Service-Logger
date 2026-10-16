@@ -246,7 +246,7 @@ async function initStandalone(){
   $('excel').textContent='Export CSV';
   $('database-path').textContent='Database stored in this browser. Save regular JSON backups.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
-  await poll();setInterval(poll,2000);
+  await poll();await initExcelSync();setInterval(poll,2000);
  }catch(e){notice('Browser database unavailable: '+(e.message||e)+'. Open the file in a regular Edge or Chrome window with browser storage enabled.',true);}
 }
 async function restoreStandalone(file){

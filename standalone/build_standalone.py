@@ -13,7 +13,7 @@ assets={
 }
 embedded={name:base64.b64encode(path.read_bytes()).decode('ascii') for name,path in assets.items()}
 api=(modules/'tesseract.js/dist/tesseract.min.js').read_text()
-runtime=(root/'standalone/browser-runtime.js').read_text()
+runtime=(root/'standalone/browser-runtime.js').read_text()+'\n'+(root/'standalone/excel-runtime.js').read_text()
 page=(root/'index.html').read_text()
 page=page.replace('Local database · files stay on this computer','Local HTML · offline')
 page=page.replace('Select folders on this computer or a mapped network drive. Existing files are included.','Use Edge or Chrome to choose two folders. This HTML runs offline; no launcher or server is needed.')
