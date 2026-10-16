@@ -69,6 +69,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .editable-value.secondary{font-size:11px;color:var(--muted);margin-top:2px}.editable-value.code{font:600 13px Consolas,monospace;color:var(--navy)}
 .editable-value.badge{display:inline-block;background:var(--blue);padding:3px 7px;font-size:11px}[data-theme="dark"] .editable-value.code{color:#a1d6fb}[data-theme="dark"] .editable-value.badge{background:var(--blue)}
 .inline-group{gap:3px}.inline-group .inline-field{border:1px solid var(--line);background:var(--pale);font-size:12px}
+.compact-value{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;display:block;width:100%}#compact-detail{max-width:650px}#compact-detail-body{display:grid;gap:16px}#compact-detail .inline-label{font-size:12px}#compact-detail .inline-field{border:1px solid var(--line);padding:9px}
 </style>
 </head>
 <body>
@@ -1101,7 +1102,7 @@ function downloadDisplayedTable(){
 function inlineField(record,field,expanded=false){
  const long=['issue','work_performed','parts_installed','notes','cause','suggestions'].includes(field);
  if(long&&!expanded){
-  const button=el('button',record[field]||'Click to add…','text-preview');button.type='button';button.title='Open '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Open '+fieldLabel(field,record.kind)+' for entry '+record.id);
+  const button=el('button',record[field]||'-','text-preview');button.type='button';button.title='Open '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Open '+fieldLabel(field,record.kind)+' for entry '+record.id);
   button.onclick=()=>{let dialog=$('text-detail');if(!dialog){dialog=el('dialog');dialog.id='text-detail';const head=el('div',undefined,'dialog-head');head.append(el('h2','Full text'));const close=el('button','Done');close.type='button';close.onclick=()=>dialog.close();head.append(close);const body=el('div',undefined,'dialog-body');body.id='text-detail-body';dialog.append(head,body);document.body.append(dialog);}
    $('text-detail-body').replaceChildren(inlineField(record,field,true));dialog.querySelector('h2').textContent=fieldLabel(field,record.kind);dialog.showModal();
   };return button;
@@ -1109,7 +1110,7 @@ function inlineField(record,field,expanded=false){
  if(!expanded){
   const secondary=['machine_release','case_number','additional_codes','severity','work_hours','downtime_hours','service_status'].includes(field);
   const prefix={machine_release:'Release: ',case_number:'Case ',additional_codes:'Other: ',work_hours:'Work hrs: ',downtime_hours:'Downtime hrs: '}[field]||'';
-  const text=record[field]?prefix+record[field]:'—';
+  const text=record[field]?prefix+record[field]:'-';
   const button=el('button',text,'editable-value'+(secondary?' secondary':'')+(['fault_code','additional_codes'].includes(field)?' code':'')+(field==='review'?' badge':''));
   button.type='button';button.title='Edit '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Edit '+fieldLabel(field,record.kind)+' for entry '+record.id);
   button.onclick=()=>{
@@ -1137,6 +1138,15 @@ function inlineField(record,field,expanded=false){
  };
  wrap.append(label,input);return wrap;
 }
+function compactFields(record,fields){
+ const filled=fields.filter(field=>String(record[field]||'').trim());
+ const text=filled.map(field=>field==='work_hours'?record[field]+' hrs':field==='downtime_hours'?record[field]+' downtime hrs':record[field]).join(' · ')||'-';
+ const button=el('button',text,'editable-value compact-value'+(fields.includes('fault_code')?' code':''));
+ button.type='button';button.setAttribute('aria-label','Edit '+(fields.includes('engineer')?'engineer and hours':'error codes')+' for entry '+record.id);
+ button.onclick=()=>{let dialog=$('compact-detail');if(!dialog){dialog=el('dialog');dialog.id='compact-detail';const head=el('div',undefined,'dialog-head');head.append(el('h2','Edit fields'));const close=el('button','Done');close.onclick=()=>dialog.close();head.append(close);const body=el('div',undefined,'dialog-body');body.id='compact-detail-body';dialog.append(head,body);document.body.append(dialog);}
+ $('compact-detail-body').replaceChildren(...fields.map(field=>inlineField(record,field,true)));dialog.showModal();};
+ return button;
+}
 function render(){if(!state||document.activeElement?.classList.contains("inline-field"))return;const all=state.records;const reports=all.filter(r=>r.kind==='reports'),faults=all.filter(r=>r.kind==='screenshots');
 $('stat-reports').textContent=reports.length;$('stat-faults').textContent=faults.length;$('stat-review').textContent=all.filter(r=>r.review!=='Reviewed').length;$('stat-sources').textContent=all.reduce((n,r)=>n+r.sources.length,0);$('count-reports').textContent=reports.length;$('count-faults').textContent=faults.length;
 const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').value;
@@ -1147,7 +1157,9 @@ $('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['servi
 for(const record of visible){
  const tr=el('tr');tr.dataset.recordId=record.id;
  const groups=kind==='reports'?[['service_date','machine_release'],['work_order','case_number'],['category'],['issue','fault_code','additional_codes'],['work_performed'],['parts_installed'],['engineer','work_hours','downtime_hours'],['review','service_status']]:[['service_date'],['fault_code','additional_codes'],['fault_name','severity'],['issue'],['suggestions'],['worker_initials'],['review']];
- for(const fields of groups){const container=el('div',undefined,'inline-group');for(const field of fields)container.append(inlineField(record,field));if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
+ for(const fields of groups){const container=el('div',undefined,'inline-group');if(fields.includes('engineer'))container.append(compactFields(record,fields));
+ else if(fields.includes('fault_code')){if(fields.includes('issue'))container.append(inlineField(record,'issue'));container.append(compactFields(record,['fault_code','additional_codes']));}
+ else for(const field of fields){if(fields.length>1&&!String(record[field]||'').trim()&&fields.some(key=>String(record[key]||'').trim()))continue;container.append(inlineField(record,field));if(fields.every(key=>!String(record[key]||'').trim()))break;}if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
  const sources=el('div',undefined,'source-links');
  for(const source of record.sources){const name=source.path.split(/[\\/]/).pop();const link=el('a',name);link.href='#';link.title='Open '+name;link.onclick=event=>{event.preventDefault();openSource(source.id);};sources.append(link);}
  cell(tr,sources);[...tr.children].forEach((td,i)=>td.dataset.label=headers[i]);$('rows').append(tr);
