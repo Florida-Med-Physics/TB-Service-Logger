@@ -1,5 +1,5 @@
 /* Browser-only local database, folder access, extraction and export. */
-const LOCAL_FIELDS=['service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type'];
+const LOCAL_FIELDS=['worker_initials','service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type'];
 const browserStore={db:null,handles:{reports:null,screenshots:null},config:{reports:'',screenshots:'',running:false},busy:false,message:'Choose the two folders to begin.',last_scan:null,job:null,seen:new Map(),timer:null,worker:null,pdf:null,records:[]};
 const supported=/\.(pdf|docx|txt|png|jpe?g|bmp|webp)$/i;
 function binaryAsset(name){return Uint8Array.from(atob(EMBEDDED[name]),c=>c.charCodeAt(0));}
