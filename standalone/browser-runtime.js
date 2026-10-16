@@ -234,6 +234,14 @@ async function localApi(route,body){
    await scanFolders();await new Promise(resolve=>setTimeout(resolve,2200));await scanFolders();
   })));
  }
+ if(route==='inline-update'){
+  if(![...LOCAL_FIELDS,'review'].includes(body.field))throw new Error('Unknown field.');
+  if(body.field==='review'&&!['Reviewed','Closure documented'].includes(body.value))throw new Error('Invalid status.');
+  const event=groupedEvents().find(r=>r.id===Number(body.id));if(!event)throw new Error('Entry no longer exists.');
+  const changed=await Promise.all(event.sources.map(async source=>{const old=await dbGet('records',source.id);if(!old)throw new Error('Source no longer exists.');return {...old,[body.field]:String(body.value)};}));
+  await new Promise((resolve,reject)=>{const tx=browserStore.db.transaction('records','readwrite');for(const record of changed)tx.objectStore('records').put(record);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+  await refreshLocalRecords();return new Response(JSON.stringify({ok:true}));
+ }
  if(route==='update')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const old=await dbGet('records',Number(body.id));if(!old)throw new Error('Unknown record.');const record={...old};for(const key of [...LOCAL_FIELDS,'review'])if(Object.hasOwn(body,key))record[key]=String(body[key]);if(!['Reviewed','Closure documented'].includes(record.review))throw new Error('Invalid review status.');await dbPut('records',record);await refreshLocalRecords();})));
  if(route==='merge')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const events=groupedEvents(),source=events.find(r=>r.id===Number(body.source)),target=events.find(r=>r.id===Number(body.target));if(!source||!target||source.id===target.id||source.kind!==target.kind)throw new Error('Choose two entries on the same tab.');for(const item of [...source.sources,...target.sources]){const record=await dbGet('records',item.id);record.linkTarget=target.id;await dbPut('records',record);}await refreshLocalRecords();})));
  throw new Error('Unknown local action.');

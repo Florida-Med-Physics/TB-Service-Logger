@@ -57,6 +57,12 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 [data-theme="dark"] header{background:#122d59}
 @media(max-width:1150px){header{grid-template-columns:260px 1fr}.header-actions{grid-column:1/-1;justify-content:flex-start}}
 @media(max-width:600px){header{grid-template-columns:1fr}.brand-logo{max-width:280px}.exports{flex-wrap:wrap}.table-tools{width:100%}.folder{flex-wrap:wrap}.folder input{flex-basis:100%}}
+
+.inline-group{display:grid;gap:8px;min-width:130px}.inline-label{font-size:10px;color:var(--muted);margin-bottom:2px}.inline-field{width:100%;min-width:115px;padding:6px 7px;background:transparent;border-color:transparent;border-bottom-color:var(--line);font-size:12px}.inline-field:hover{border-color:var(--line)}textarea.inline-field{min-width:230px;min-height:72px}.inline-field:invalid{border-color:#b23b31}.source-links{display:grid;gap:9px;min-width:160px;max-width:260px;overflow-wrap:anywhere}.source-links a{color:#246693;text-underline-offset:3px}[data-theme="dark"] .source-links a{color:#a1d6fb}
+
+/* Fit all report columns to the available page width. */
+.table-wrap{overflow-x:hidden}table{min-width:0;table-layout:fixed}th,td{padding:10px 7px;overflow-wrap:anywhere;white-space:normal}th{font-size:10px;letter-spacing:.15px}.sort-column{white-space:normal;text-align:left}.inline-group{min-width:0;gap:6px}.inline-field{min-width:0;width:100%;padding:4px;font-size:11px}.inline-label{font-size:9px;overflow-wrap:anywhere}.source-links{min-width:0;max-width:100%;font-size:10px}.text-preview{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;width:100%;max-height:5.5em;padding:3px;border:0;text-align:left;background:transparent;font-size:12px;color:var(--ink);white-space:normal;overflow-wrap:anywhere}.text-preview:hover{text-decoration:underline;text-underline-offset:3px}#text-detail{max-width:850px}#text-detail textarea.inline-field{min-width:0;min-height:300px;font-size:14px;line-height:1.6;border:1px solid var(--line)}#text-detail .inline-label{font-size:12px}
+@media(max-width:760px){.table-wrap{max-height:none}table,tbody,tr,td{display:block;width:100%}thead{display:none}tbody tr{padding:12px;border-bottom:2px solid var(--line)}td{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;border:0}td::before{content:attr(data-label);font-weight:650;font-size:11px;color:var(--muted)}.inline-field{font-size:12px}.source-links{font-size:12px}}
 </style>
 </head>
 <body>
@@ -929,6 +935,14 @@ async function localApi(route,body){
    await scanFolders();await new Promise(resolve=>setTimeout(resolve,2200));await scanFolders();
   })));
  }
+ if(route==='inline-update'){
+  if(![...LOCAL_FIELDS,'review'].includes(body.field))throw new Error('Unknown field.');
+  if(body.field==='review'&&!['Reviewed','Closure documented'].includes(body.value))throw new Error('Invalid status.');
+  const event=groupedEvents().find(r=>r.id===Number(body.id));if(!event)throw new Error('Entry no longer exists.');
+  const changed=await Promise.all(event.sources.map(async source=>{const old=await dbGet('records',source.id);if(!old)throw new Error('Source no longer exists.');return {...old,[body.field]:String(body.value)};}));
+  await new Promise((resolve,reject)=>{const tx=browserStore.db.transaction('records','readwrite');for(const record of changed)tx.objectStore('records').put(record);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+  await refreshLocalRecords();return new Response(JSON.stringify({ok:true}));
+ }
  if(route==='update')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const old=await dbGet('records',Number(body.id));if(!old)throw new Error('Unknown record.');const record={...old};for(const key of [...LOCAL_FIELDS,'review'])if(Object.hasOwn(body,key))record[key]=String(body[key]);if(!['Reviewed','Closure documented'].includes(record.review))throw new Error('Invalid review status.');await dbPut('records',record);await refreshLocalRecords();})));
  if(route==='merge')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const events=groupedEvents(),source=events.find(r=>r.id===Number(body.source)),target=events.find(r=>r.id===Number(body.target));if(!source||!target||source.id===target.id||source.kind!==target.kind)throw new Error('Choose two entries on the same tab.');for(const item of [...source.sources,...target.sources]){const record=await dbGet('records',item.id);record.linkTarget=target.id;await dbPut('records',record);}await refreshLocalRecords();})));
  throw new Error('Unknown local action.');
@@ -1038,7 +1052,7 @@ let token=location.hash.slice(1);
 try{if(!token)token=sessionStorage.getItem('truebeam-session')||'';if(location.hash)sessionStorage.setItem('truebeam-session',token);}catch{}
 if(location.hash)history.replaceState(null,'',location.pathname);
 let state=null,kind='reports',selected=null,loaded=false,lastJob='',pending=new Set(),polling=false;
-const labels={worker_initials:'Worker Initials',service_date:'Malfunction / event start',machine_release:'Machine release',machine:'Machine / asset',work_order:'Work order #',case_number:'Case #',category:'Category',fault_code:'Primary error code',additional_codes:'Additional error codes',fault_name:'Fault name',severity:'Severity',impact:'Impact',issue:'Subject / fault description',cause:'Cause',suggestions:'Vendor suggestions',work_performed:'Summary of work',parts_installed:'Parts installed',engineer:'Field engineer',work_hours:'Total work hours',downtime_hours:'Agreed downtime hours',service_status:'Service status',notes:'Follow-up / notes',document_type:'Document type'};
+const labels={review:'Status',worker_initials:'Worker Initials',service_date:'Malfunction / event start',machine_release:'Machine release',machine:'Machine / asset',work_order:'Work order #',case_number:'Case #',category:'Category',fault_code:'Primary error code',additional_codes:'Additional error codes',fault_name:'Fault name',severity:'Severity',impact:'Impact',issue:'Subject / fault description',cause:'Cause',suggestions:'Vendor suggestions',work_performed:'Summary of work',parts_installed:'Parts installed',engineer:'Field engineer',work_hours:'Total work hours',downtime_hours:'Agreed downtime hours',service_status:'Service status',notes:'Follow-up / notes',document_type:'Document type'};
 function notice(text,error=false){$('notice').textContent=text;$('notice').className='notice show'+(error?' error':'');}
 async function api(path,body){return localApi(path,body);}
 async function command(action,body={}){try{const data=await(await api(action,body)).json();pending.add(data.id);notice('Change queued. It will apply after the current folder scan finishes.');return data;}catch(error){notice(error.message,true);return null;}}
@@ -1078,21 +1092,48 @@ function downloadDisplayedTable(){
  notice('Downloaded '+records.length+' entries in the current filter and sort order.');
 }
 
-function render(){if(!state)return;const all=state.records;const reports=all.filter(r=>r.kind==='reports'),faults=all.filter(r=>r.kind==='screenshots');
+function inlineField(record,field,expanded=false){
+ const long=['issue','work_performed','parts_installed','notes','cause','suggestions'].includes(field);
+ if(long&&!expanded){
+  const button=el('button',record[field]||'Click to add…','text-preview');button.type='button';button.title='Open '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Open '+fieldLabel(field,record.kind)+' for entry '+record.id);
+  button.onclick=()=>{let dialog=$('text-detail');if(!dialog){dialog=el('dialog');dialog.id='text-detail';const head=el('div',undefined,'dialog-head');head.append(el('h2','Full text'));const close=el('button','Done');close.type='button';close.onclick=()=>dialog.close();head.append(close);const body=el('div',undefined,'dialog-body');body.id='text-detail-body';dialog.append(head,body);document.body.append(dialog);}
+   $('text-detail-body').replaceChildren(inlineField(record,field,true));dialog.querySelector('h2').textContent=fieldLabel(field,record.kind);dialog.showModal();
+  };return button;
+ }
+ const wrap=el('div'),label=el('label',fieldLabel(field,record.kind),'inline-label');
+ const input=el(field==='review'?'select':long?'textarea':'input',undefined,'inline-field');
+ input.id='inline-'+record.id+'-'+field;input.dataset.field=field;input.dataset.recordId=record.id;label.htmlFor=input.id;
+ if(field==='review')for(const value of ['Closure documented','Reviewed'])input.append(el('option',value));
+ input.value=record[field]||'';input.setAttribute('aria-label',fieldLabel(field,record.kind)+' for entry '+record.id);
+ if(field==='worker_initials'){input.maxLength=12;input.placeholder='e.g. BK';input.oninput=()=>{input.value=input.value.toUpperCase();};}
+ if(long)input.rows=3;
+ input.onchange=async()=>{
+  const value=input.value;input.setAttribute('aria-busy','true');
+  try{
+   if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});
+   else await command('update',{...record,[field]:value});
+   record[field]=value;input.setCustomValidity('');input.title='Saved';notice('Entry '+record.id+' saved.');await poll();
+  }catch(error){input.setCustomValidity('Save failed');input.title=error.message;notice('Could not save entry '+record.id+': '+error.message,true);}
+  finally{input.removeAttribute('aria-busy');}
+ };
+ wrap.append(label,input);return wrap;
+}
+function render(){if(!state||document.activeElement?.classList.contains("inline-field"))return;const all=state.records;const reports=all.filter(r=>r.kind==='reports'),faults=all.filter(r=>r.kind==='screenshots');
 $('stat-reports').textContent=reports.length;$('stat-faults').textContent=faults.length;$('stat-review').textContent=all.filter(r=>r.review!=='Reviewed').length;$('stat-sources').textContent=all.reduce((n,r)=>n+r.sources.length,0);$('count-reports').textContent=reports.length;$('count-faults').textContent=faults.length;
 const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').value;
 let visible=displayedRecords();syncSortControls();
-const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer / hours','Review / status','Sources','']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Worker Initials','Review','Sources',''];
-$('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','work_performed','parts_installed','engineer','review','sources',null]:['service_date','fault_code','fault_name','issue','suggestions','worker_initials','review','sources',null];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
-for(const record of visible){const tr=el('tr');const date=el('div',record.service_date||'Date not found');date.append(el('div',kind==='reports'?(record.machine_release?'Release: '+record.machine_release:'Release not stated'):'','secondary'));cell(tr,date);
-if(kind==='reports'){
-const wo=el('div',record.work_order||record.document_type||'Report');wo.append(el('div',record.case_number?'Case '+record.case_number:'Case not stated','secondary'));cell(tr,wo);cell(tr,record.category);
-const subject=el('div',record.issue||record.fault_name||'Review source','truncate');if(record.fault_code||record.additional_codes)subject.append(el('div',[record.fault_code,record.additional_codes].filter(Boolean).join(', '),'code'));cell(tr,subject,'text');cell(tr,el('div',record.work_performed||'Work not identified','truncate'),'text');cell(tr,el('div',record.parts_installed||'Not stated','truncate'),'text');
-const eng=el('div',record.engineer||'Not stated');eng.append(el('div',(record.work_hours?record.work_hours+' work hrs':'Hours not stated')+(record.downtime_hours?' · '+record.downtime_hours+' downtime hrs':''),'secondary'));cell(tr,eng);
-}else{const codes=el('div',record.fault_code||'Not identified','code');if(record.additional_codes)codes.append(el('div','Other: '+record.additional_codes,'secondary'));cell(tr,codes);const name=el('div',record.fault_name||'Not identified');name.append(el('div',record.severity,'secondary'));cell(tr,name,'text');cell(tr,el('div',record.issue||'Review original source','truncate'),'text');cell(tr,el('div',record.suggestions||'Not documented','truncate'),'text');cell(tr,record.worker_initials);}
-const status=el('div');status.append(badge(record.review,record.review==='Reviewed'?'done':''));if(record.service_status&&kind==='reports'&&record.service_status!==record.review)status.append(el('div',record.service_status,'secondary'));if(sourceErrors(record).length)status.append(el('div','Import needs attention','secondary'));if(record.possible_duplicate)status.append(el('div','Similar fault — review','secondary'));cell(tr,status);
-cell(tr,record.sources.length+' file'+(record.sources.length===1?'':'s'));const action=el('button','Review','link');action.onclick=()=>openDetail(record.id);cell(tr,action);$('rows').append(tr);
+const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer / hours','Status','Service report']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Worker Initials','Status','Screenshot'];
+$('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','work_performed','parts_installed','engineer','review','sources']:['service_date','fault_code','fault_name','issue','suggestions','worker_initials','review','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
+
+for(const record of visible){
+ const tr=el('tr');tr.dataset.recordId=record.id;
+ const groups=kind==='reports'?[['service_date','machine_release'],['work_order','case_number'],['category'],['issue','fault_code','additional_codes'],['work_performed'],['parts_installed'],['engineer','work_hours','downtime_hours'],['review','service_status']]:[['service_date'],['fault_code','additional_codes'],['fault_name','severity'],['issue'],['suggestions'],['worker_initials'],['review']];
+ for(const fields of groups){const container=el('div',undefined,'inline-group');for(const field of fields)container.append(inlineField(record,field));if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
+ const sources=el('div',undefined,'source-links');
+ for(const source of record.sources){const name=source.path.split(/[\\/]/).pop();const link=el('a',name);link.href='#';link.title='Open '+name;link.onclick=event=>{event.preventDefault();openSource(source.id);};sources.append(link);}
+ cell(tr,sources);[...tr.children].forEach((td,i)=>td.dataset.label=headers[i]);$('rows').append(tr);
 }
+
 $('results').textContent=visible.length+' of '+all.filter(r=>r.kind===kind).length+' entries';$('empty').hidden=visible.length>0;$('empty').querySelector('h3').textContent=query||filter?'No matching entries':kind==='reports'?'No service reports yet':'No fault reports yet';
 $('last-scan').textContent=state.last_scan?'Last scan: '+state.last_scan:'No scan completed yet';$('database-path').textContent='Database: '+state.database;
 $('dot').className='dot'+(state.busy?' busy':state.config.running?' active':'');$('monitor-status').textContent=(state.config.running?'Monitoring · ':state.busy?'Scanning · ':'Paused · ')+state.message;
