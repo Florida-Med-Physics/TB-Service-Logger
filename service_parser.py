@@ -86,5 +86,5 @@ def parse_service(text):
         if code not in codes:codes.append(code)
     if codes:
         result['fault_code']=codes[0];result['additional_codes']=', '.join(codes[1:])
-    result['service_status']='Closure documented' if result.get('work_performed') else 'Needs review'
+    result['service_status']='Closure documented' if result.get('work_performed') else 'Closure documented'
     return result

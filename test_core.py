@@ -21,7 +21,7 @@ class WorkflowTests(unittest.TestCase):
         wb=load_workbook(self.root/'log.xlsx');ws=wb['Service Reports']
         self.assertEqual(ws.max_row,2);self.assertEqual(ws.cell(2,14).value,'=1+1');self.assertEqual(ws.cell(2,14).data_type,'s')
         p.write_text(p.read_text()+'\nStatus: complete');os.utime(p,(2,2));self.scan()
-        self.assertEqual(self.engine.rows()[0]['notes'],'=1+1');self.assertEqual(self.engine.rows()[0]['review'],'Needs review')
+        self.assertEqual(self.engine.rows()[0]['notes'],'=1+1');self.assertEqual(self.engine.rows()[0]['review'],'Closure documented')
         second=Engine(self.root/'data');self.assertEqual(len(second.rows()),1);second.db.close()
     def test_exact_and_timed_duplicates_and_recurrence(self):
         text='Id: 420219\nName: COL.SW.MLC.TrajDeviationLeafA\nDescription: mismatch\nDateTime: 09-Oct-2026 08:10:40 AM'

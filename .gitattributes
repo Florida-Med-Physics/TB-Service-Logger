@@ -3,3 +3,5 @@
 
 *.bat text eol=crlf
 *.command text eol=lf
+
+standalone/TrueBeam-Local.html linguist-generated=true -diff

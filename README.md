@@ -1,54 +1,50 @@
-# TrueBeam Service Log — local HTML app
+# TrueBeam Service Log
 
-A browser interface with a persistent local SQLite database and two tabs:
+## Standalone local HTML — recommended
 
-- **Service Reports:** work-order and PMP documents, service dates, work performed, parts, engineer and hours.
-- **Fault Reports:** screenshot fault codes, descriptions, timestamps, severity, impact and linked originals.
+Download **[standalone/TrueBeam-Local.html](standalone/TrueBeam-Local.html)** as a file and
+double-click it in Microsoft Edge or Google Chrome.
 
-Select two source folders. The local helper checks them every three seconds while running.
-Search records, review/edit extracted fields, link confirmed duplicates, export Excel, and download database backups.
-No application data is uploaded. The browser interface has no CDN, external font, analytics, or cloud API.
+It runs directly from a file URL with no Python, no installed OCR engine, no local server,
+and no internet connection. PDF parsing, screenshot OCR and English language data are embedded.
 
-## Run on Windows
+Select the service-report and screenshot folders with Browse, grant read access, and start
+monitoring. The app keeps its database in the browser and provides two tabs:
 
-Extract the whole package, read **START HERE.txt**, then double-click **Start Local App.bat**.
-Python 3.10+ is required. First launch installs the Python dependencies.
-Screenshot/scanned-PDF OCR requires Tesseract, available on PATH, in its usual Program Files installation,
-in a local ocr subfolder, or through TESSERACT_CMD.
-After setup, normal use can run without an internet connection.
-Offline installation steps for IT are included in START HERE.txt.
+- **Service Reports:** work orders and PMP attachments, service dates, work performed,
+  parts, engineer and hours.
+- **Fault Reports:** error codes, fault descriptions, timestamps, severity, impact and
+  linked original screenshots.
 
-The HTML requires the included local Python helper for monitoring and OCR.
-It is not a single-file, double-click HTML deployment or a standalone Windows executable.
+The default status is **Closure documented**. Dark mode can be turned on or off and is saved.
+Search, edit entries, link confirmed duplicates, export a tab as CSV, and back up or restore
+the complete database as JSON.
 
-## Run on Mac
+Keep the HTML at the same location and use the same browser profile. Monitoring runs while
+the page is open. Save regular JSON backups; browser storage is not the source folder.
+Original files are never modified or uploaded.
 
-Double-click **Start Local App.command**. Screenshot OCR uses Apple Vision through Swift
-and requires Apple Command Line Tools.
+See **[standalone/README.md](standalone/README.md)** for details and limitations.
 
-## Data
+## Optional Python/server version
 
-The default Windows data directory is %LOCALAPPDATA%/.truebeam-service-log;
-Mac uses ~/.truebeam-service-log. Folder settings and the Excel export live beside the database.
-The browser shows the database path. A consistent backup is available through Back up database.
-Use a local disk for SQLite and institutionally backed-up storage for copies.
-Close the previous desktop app before sharing its data directory.
+The older helper-based version is still available for deployments that prefer a local SQLite
+database and an Excel export. It is separate from the standalone HTML and is not needed to
+use it.
 
-Source folders are read recursively. Supported files: PDF, DOCX, TXT, PNG, JPEG, TIFF, BMP.
-Generated Excel logs are deliberately ignored to avoid feeding them back into the database.
-PMP documents are shown as attachment records, separately from work orders.
-No sample reports, patient screenshots, or database records are included in the distribution.
-
-Matching screenshot codes and explicit event timestamps can share an event with several sources.
-Different event times remain separate. Confirm duplicates before manually linking; sources are retained.
-Manual linking has no undo control in this version.
+Extract the repository and run **Start Local App.bat** on Windows or **Start Local App.command**
+on Mac. Python 3.10+ is required. Windows screenshot OCR additionally requires Tesseract.
+Read **START HERE.txt** for setup and offline installation instructions.
 
 ## Validation
 
-Run `python -m unittest -v test_core.py test_web.py`.
+The Python version has 20 tests:
+`python -m unittest -v test_core.py test_web.py`
 
-The local database/web tests cover persistence, new-file detection, paused scans, review edits,
-duplicate grouping, source access, backup consistency, workbook export and local session checks.
-Browser smoke tests exercised both tabs, review editing, search and backup downloading in Chrome on Mac.
-Service parsing was checked against the 38 supplied work-order PDFs and 15 PMP attachments.
-Windows launch and OCR integration still require validation on the target computer.
+The standalone HTML was tested from a file URL with networking disabled, including:
+native browser file-system handles, new-file monitoring, persistent database records, edits,
+duplicates, backups, restore, source reconnection, and dark mode.
+The 38 supplied work orders parsed with their key fields, and all eight screenshot examples
+produced the expected primary error codes. Additional 100000 codes were retained where shown.
+
+Windows/browser-policy validation is still required on the target UFHPT computer.

@@ -75,6 +75,8 @@ class Engine:
         for column in tuple(FIELDS)+('extractor_version',):
             if column not in columns:
                 self.db.execute(f"ALTER TABLE records ADD COLUMN {column} TEXT DEFAULT ''")
+        self.db.execute("UPDATE records SET review='Closure documented' WHERE review='Needs review'")
+        self.db.execute("UPDATE records SET service_status='Closure documented' WHERE service_status='Needs review'")
         self.db.commit()
         self.db.execute('CREATE TABLE IF NOT EXISTS links (source_id INTEGER PRIMARY KEY, target_id INTEGER NOT NULL)')
         self.config_path = self.home / 'settings.json'
@@ -143,8 +145,8 @@ class Engine:
 
     def update(self, data):
         record_id = int(data['id'])
-        review = data.get('review','Needs review')
-        if review not in ('Needs review','Reviewed'):
+        review = data.get('review','Closure documented')
+        if review not in ('Closure documented','Reviewed'):
             raise ValueError('Invalid review status')
         self.db.execute('UPDATE records SET '+','.join(f'{k}=?' for k in FIELDS)+',review=? WHERE id=?', [str(data.get(k,'')) for k in FIELDS]+[review,record_id])
         self.db.commit()
@@ -195,7 +197,7 @@ class Engine:
                             previous = parse(old['text'] or '')
                             fields = {k:old[k] if old[k] and (old['review']=='Reviewed' or old[k] != previous.get(k,'')) else fields[k] for k in FIELDS}
                         columns = ['path','kind','digest','imported','text','error','review','extractor_version']+FIELDS
-                        values = [str(path),key,digest,datetime.now().isoformat(timespec='seconds'),text,error,'Needs review',EXTRACTOR_VERSION]+[fields[k] for k in FIELDS]
+                        values = [str(path),key,digest,datetime.now().isoformat(timespec='seconds'),text,error,'Closure documented',EXTRACTOR_VERSION]+[fields[k] for k in FIELDS]
                         self.db.execute('INSERT INTO records ('+','.join(columns)+') VALUES ('+','.join('?' for _ in columns)+') ON CONFLICT(path) DO UPDATE SET '+','.join(k+'=excluded.'+k for k in columns if k!='path'), values)
                         self.db.commit()
                         self.dirty = True
@@ -239,7 +241,7 @@ class Engine:
                 source_cell.style = 'Hyperlink'
                 source_cell.alignment=Alignment(vertical='top',wrap_text=True)
                 ws.row_dimensions[ws.max_row].height = 75
-                if errors or r['review'] == 'Needs review':
+                if errors or r['review'] == 'Closure documented':
                     ws.cell(ws.max_row,headers.index('Review')+1).fill = PatternFill('solid',fgColor='FFF0CB')
                 if not r['fault_code'] and kind=='screenshots':
                     ws.cell(ws.max_row,headers.index('Error code')+1).fill = PatternFill('solid',fgColor='FFDCDC')
