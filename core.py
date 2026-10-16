@@ -6,7 +6,7 @@ from pathlib import Path
 SUPPORTED = {'.png','.jpg','.jpeg','.tif','.tiff','.bmp','.pdf','.docx','.txt'}
 EXTRACTOR_VERSION = '3-local-browser-service-reports'
 
-FIELDS = ['worker_initials','service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type']
+FIELDS = ['service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type','worker_initials']
 
 def extract(path):
     suffix = path.suffix.lower()
