@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TrueBeam Service Log</title>
+<script>
+try{if(localStorage.getItem('truebeam-theme')==='dark')document.documentElement.dataset.theme='dark';}catch{}
+</script>
+<style>
+:root{--navy:#173b58;--navy2:#245574;--ink:#18364b;--muted:#687b8a;--line:#dce5eb;--pale:#f2f6f8;--blue:#e8f1f8;--amber:#fff1d2;--green:#147351}
+*{box-sizing:border-box}body{margin:0;background:var(--pale);font:14px/1.5 "Segoe UI",Arial,sans-serif;color:var(--ink)}
+button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:7px;background:white;color:var(--ink);padding:9px 13px}button:hover{background:#eaf1f6}button:disabled{opacity:.5;cursor:wait}.primary{background:var(--navy);border-color:var(--navy);color:white}.primary:hover{background:var(--navy2)}button:focus-visible,a:focus-visible{outline:3px solid #e9a83d;outline-offset:2px}
+header{background:var(--navy);color:white;padding:25px 34px;display:flex;align-items:center;justify-content:space-between;gap:20px}header small{color:#bfd2e1;letter-spacing:1.7px;font-size:11px}h1{font-size:26px;margin:2px 0 0;font-weight:600}.local{font-size:12px;border:1px solid #698599;border-radius:30px;padding:6px 12px;white-space:nowrap}main{max-width:1700px;margin:auto;padding:25px 30px 40px}.intro{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:20px}.intro p{margin:0;color:var(--muted)}.exports{display:flex;gap:8px}
+.card{background:white;border:1px solid var(--line);border-radius:10px}.setup{padding:20px 22px;margin-bottom:18px}.setup-top{display:flex;align-items:center;justify-content:space-between;gap:15px}h2{font-size:16px;margin:0 0 5px}p.sub{color:var(--muted);font-size:12px;margin:0}.folders{display:grid;grid-template-columns:1fr 1fr auto;gap:17px;margin-top:17px;align-items:end}label{font-size:12px;font-weight:600;display:block;margin-bottom:5px}.folder{display:flex;gap:7px}.folder input{min-width:0;width:100%}input,select,textarea{border:1px solid #cad7e0;border-radius:6px;padding:9px 11px;color:var(--ink);background:white}input:focus,select:focus,textarea:focus{outline:2px solid #86aecb;outline-offset:1px}.controls{display:flex;gap:7px;flex-wrap:wrap}.status{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px;margin-top:14px;min-height:23px}.dot{width:8px;height:8px;flex:none;border-radius:50%;background:#9aaab5}.dot.active{background:#2c9470}.dot.busy{background:#d79a22}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:19px 0}.stat{padding:16px 20px}.stat span{display:block;color:var(--muted);font-size:12px}.stat strong{font-size:27px;font-weight:600}.stat small{font-size:12px;color:var(--muted);margin-left:7px}.data{overflow:hidden}.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 20px;gap:22px}.tab{border:0;border-radius:0;padding:17px 2px 13px;background:white;color:var(--muted);border-bottom:3px solid transparent;font-weight:600}.tab[aria-selected=true]{color:var(--navy);border-bottom-color:var(--navy)}.count{font-size:11px;background:var(--pale);border-radius:20px;padding:2px 7px;margin-left:6px}.filters{padding:17px 20px;display:flex;gap:10px;align-items:center}.filters input{flex:1;min-width:100px}.filters span{font-size:12px;color:var(--muted);white-space:nowrap}.table-wrap{overflow:auto;max-height:58vh}table{border-collapse:collapse;min-width:1250px;width:100%;text-align:left}thead{position:sticky;top:0;z-index:1}th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6a7e8d;background:#f5f8fa;padding:12px 17px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);white-space:nowrap}td{padding:15px 17px;vertical-align:top;border-bottom:1px solid #e8edf1;font-size:12px}tbody tr:hover{background:#f6f9fc}td .code{font:600 14px Consolas,monospace;color:var(--navy)}.text{max-width:380px;white-space:normal}.truncate{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.secondary{font-size:11px;color:var(--muted);margin-top:4px}.badge{font-size:11px;border-radius:4px;padding:3px 7px;display:inline-block;background:var(--blue);white-space:nowrap}.badge.review{background:var(--amber);color:#87600c}.badge.done{background:#e4f4ec;color:#236b4d}.badge.error{background:#fae5e5;color:#9f3333}.link{padding:0;border:0;background:transparent;color:#246693;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}.empty{padding:65px 25px;text-align:center;color:var(--muted)}.empty h3{color:var(--ink);font-size:18px;margin:0 0 6px}.table-foot{padding:12px 20px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:15px}.notice{display:none;padding:12px 17px;margin-bottom:16px;border:1px solid #cadde9;background:#e9f3fa;border-radius:8px;white-space:pre-wrap}.notice.error{border-color:#ebc6c6;background:#fff0f0}.notice.show{display:block}footer{font-size:11px;color:var(--muted);margin-top:18px;overflow-wrap:anywhere}
+dialog{border:1px solid var(--line);border-radius:12px;max-width:1100px;width:94vw;max-height:91vh;padding:0;box-shadow:0 20px 80px #0a213347;color:var(--ink)}dialog::backdrop{background:#0c243774}.dialog-head{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.dialog-head h2{font-size:20px}.dialog-body{padding:20px 24px;overflow:auto;max-height:68vh}.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px 20px}.edit-grid input,.edit-grid textarea,.edit-grid select{width:100%}.edit-grid .wide{grid-column:1/-1}textarea{resize:vertical;min-height:85px}.sources{margin-top:24px;border-top:1px solid var(--line);padding-top:15px}.source{padding:9px 0;overflow-wrap:anywhere}.source small{color:var(--muted);display:block}.raw{white-space:pre-wrap;font:12px/1.5 Consolas,monospace;max-height:230px;overflow:auto;background:var(--pale);padding:14px}.dialog-foot{padding:15px 24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}.dialog-foot small{color:var(--muted)}.warning{background:#fff4da;padding:11px 14px;border-radius:6px;margin-bottom:18px;font-size:12px}.launch-help{padding:25px;border:1px solid #e4cf9a;border-radius:8px;background:#fff8e8;max-width:800px;margin:30px auto}.launch-help h2{font-size:20px}code{font-family:Consolas,monospace}
+@media(max-width:900px){header{padding:20px}.folders{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}main{padding:18px 14px}.intro{align-items:flex-start;flex-direction:column}.edit-grid{grid-template-columns:1fr}.edit-grid .wide{grid-column:auto}.local{display:none}.table-foot{flex-direction:column;gap:4px}.filters{flex-wrap:wrap}}
+/* Theme controls stay available on desktop and compact screens. */
+.header-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.theme-toggle{background:transparent;border-color:#7893a7;color:#fff;white-space:nowrap}
+.theme-toggle:hover{background:#2b526d}
+:root[data-theme="dark"]{color-scheme:dark;--navy:#173b58;--navy2:#2b5c7d;--ink:#e1eaf2;--muted:#a6bacb;--line:#3a5062;--pale:#101c27;--blue:#263f55;--amber:#493b20;--green:#91d4b7}
+[data-theme="dark"] header{background:#102f46}
+[data-theme="dark"] .card,[data-theme="dark"] .tab,[data-theme="dark"] button,[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:#1b2a38;color:var(--ink)}
+[data-theme="dark"] button:hover{background:#2c4357}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{border-color:#50687b}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#9cb0c0;opacity:1}
+[data-theme="dark"] .primary{background:#2b5c7d;border-color:#467c9e;color:#fff}
+[data-theme="dark"] .primary:hover{background:#356d93}
+[data-theme="dark"] .theme-toggle{background:transparent;border-color:#7893a7;color:#fff}
+[data-theme="dark"] .tab[aria-selected=true]{color:#d4eaff;border-bottom-color:#85c6f2}
+[data-theme="dark"] th{background:#223747;color:#c4d6e5}
+[data-theme="dark"] td{border-bottom-color:#344a5b}
+[data-theme="dark"] tbody tr:hover{background:#253b4d}
+[data-theme="dark"] td .code,[data-theme="dark"] .link{color:#a1d6fb}
+[data-theme="dark"] .badge.review{color:#ffe1a4}
+[data-theme="dark"] .badge.done{background:#214636;color:#b4e9cd}
+[data-theme="dark"] .badge.error{background:#512c32;color:#ffc6cc}
+[data-theme="dark"] dialog{background:#1b2a38;color:var(--ink)}
+[data-theme="dark"] .warning,[data-theme="dark"] .launch-help{background:#3b321f;border-color:#7e6b3a;color:#ffe6b4}
+[data-theme="dark"] .notice{background:#203e54;border-color:#477795;color:#e1effb}
+[data-theme="dark"] .notice.error{background:#48292f;border-color:#8d505b;color:#ffd6dc}
+</style>
+</head>
+<body>
+<header><div><small>UFHPT · EQUIPMENT RECORDS</small><h1>TrueBeam Service Log</h1></div><div class="header-actions"><span class="local">Local database · files stay on this computer</span><button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">Dark mode: Off</button></div></header>
+<main>
+<div id="launcher" class="launch-help" hidden><h2>Start the local app first</h2><p>Extract the application folder, then double-click <strong>Start Local App.bat</strong> on Windows or <strong>Start Local App.command</strong> on Mac. The launcher opens this page with a secure local session.</p><p>Opening this HTML file alone cannot monitor folders or run screenshot OCR. See <strong>START HERE.txt</strong> for setup requirements.</p></div>
+<div id="workspace">
+<div class="intro"><p>Keep service history and fault evidence together. Search, review, and trace every entry to its source.</p><div class="exports"><button id="excel">Export Excel</button><button id="backup">Back up database</button></div></div>
+<div role="status" id="notice" class="notice" aria-live="polite"></div>
+<section class="card setup" aria-label="Folder monitoring">
+<div class="setup-top"><div><h2>Folder monitoring</h2><p class="sub">Select folders on this computer or a mapped network drive. Existing files are included.</p></div><button id="retry">Retry failed imports</button></div>
+<div class="folders">
+<div><label for="reports">Service-report folder</label><div class="folder"><input id="reports" placeholder="C:\TrueBeam\Service reports" autocomplete="off"><button class="browse" data-for="reports">Browse…</button></div></div>
+<div><label for="screenshots">Screenshot folder</label><div class="folder"><input id="screenshots" placeholder="C:\TrueBeam\PrintScreen" autocomplete="off"><button class="browse" data-for="screenshots">Browse…</button></div></div>
+<div class="controls"><button class="primary" id="start">Start monitoring</button><button id="pause">Pause</button><button id="scan">Scan now</button></div>
+</div>
+<div class="status"><span id="dot" class="dot"></span><span id="monitor-status">Connecting to the local helper…</span></div>
+</section>
+<section class="stats" aria-label="Database summary">
+<div class="card stat"><span>Service reports</span><strong id="stat-reports">0</strong><small>documents</small></div>
+<div class="card stat"><span>Fault reports</span><strong id="stat-faults">0</strong><small>events</small></div>
+<div class="card stat"><span>Needs review</span><strong id="stat-review">0</strong><small>entries</small></div>
+<div class="card stat"><span>Linked source files</span><strong id="stat-sources">0</strong><small>originals retained</small></div>
+</section>
+<section class="card data">
+<div class="tabs" role="tablist" aria-label="Report type"><button class="tab" id="tab-reports" role="tab" aria-controls="report-panel" aria-selected="true" data-kind="reports">Service Reports <span class="count" id="count-reports">0</span></button><button class="tab" id="tab-faults" role="tab" aria-controls="report-panel" aria-selected="false" data-kind="screenshots" tabindex="-1">Fault Reports <span class="count" id="count-faults">0</span></button></div>
+<div id="report-panel" role="tabpanel" aria-labelledby="tab-reports">
+<div class="filters"><input id="search" aria-label="Search reports" placeholder="Search work order, error code, machine, or description…"><select id="review-filter" aria-label="Filter by review status"><option value="">All entries</option><option>Needs review</option><option>Reviewed</option><option value="errors">Import problems</option><option value="duplicates">Similar faults / duplicates</option></select><span id="results">0 entries</span></div>
+<div class="table-wrap"><table><thead id="head"></thead><tbody id="rows"></tbody></table><div class="empty" id="empty"><h3>No reports yet</h3><p>Choose your folders above, then start monitoring.</p></div></div>
+<div class="table-foot"><span>Detailed messages determine the primary error code. Similar faults stay separate until linked.</span><span id="last-scan">No scan completed yet</span></div>
+</div>
+</section>
+<footer><span id="database-path">Database stored on this computer.</span><br>Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.</footer>
+</div>
+</main>
+<dialog id="detail" aria-labelledby="detail-title">
+<div class="dialog-head"><div><h2 id="detail-title">Review report</h2><p class="sub" id="detail-subtitle"></p></div><button id="close" aria-label="Close report">Close</button></div>
+<form id="edit-form"><div class="dialog-body"><div id="detail-warning" class="warning" hidden></div><div id="edit-grid" class="edit-grid"></div><div class="sources"><h2>Source files</h2><div id="source-list"></div><details><summary>Extracted source text</summary><pre id="raw" class="raw"></pre></details></div><div class="sources"><h2>Link a duplicate</h2><p class="sub">Choose the entry to retain. Source files remain linked; the retained entry’s fields take precedence. Links cannot currently be undone here.</p><div class="folder" style="margin-top:10px"><select id="merge-target" aria-label="Retained duplicate entry" style="flex:1"></select><button id="merge" type="button">Link as duplicate</button></div></div></div>
+<div class="dialog-foot"><small>Changes are stored in the local database.</small><button class="primary" type="submit">Save changes</button></div></form>
+</dialog>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+function updateThemeToggle(){
+ const dark=document.documentElement.dataset.theme==='dark';
+ $('theme-toggle').textContent='Dark mode: '+(dark?'On':'Off');
+ $('theme-toggle').setAttribute('aria-pressed',String(dark));
+}
+$('theme-toggle').onclick=()=>{
+ const dark=document.documentElement.dataset.theme!=='dark';
+ document.documentElement.dataset.theme=dark?'dark':'light';
+ try{localStorage.setItem('truebeam-theme',dark?'dark':'light');}catch{}
+ updateThemeToggle();
+};
+updateThemeToggle();
+let token=location.hash.slice(1);
+try{if(!token)token=sessionStorage.getItem('truebeam-session')||'';if(location.hash)sessionStorage.setItem('truebeam-session',token);}catch{}
+if(location.hash)history.replaceState(null,'',location.pathname);
+let state=null,kind='reports',selected=null,loaded=false,lastJob='',pending=new Set(),polling=false;
+const labels={service_date:'Malfunction / event start',machine_release:'Machine release',machine:'Machine / asset',work_order:'Work order #',case_number:'Case #',category:'Category',fault_code:'Primary error code',additional_codes:'Additional error codes',fault_name:'Fault name',severity:'Severity',impact:'Impact',issue:'Subject / fault description',cause:'Cause',suggestions:'Vendor suggestions',work_performed:'Summary of work',parts_installed:'Parts installed',engineer:'Field engineer',work_hours:'Total work hours',downtime_hours:'Agreed downtime hours',service_status:'Service status',notes:'Follow-up / notes',document_type:'Document type'};
+function notice(text,error=false){$('notice').textContent=text;$('notice').className='notice show'+(error?' error':'');}
+async function api(path,body){const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'X-Local-Token':token,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});if(!response.ok){let message='Local request failed.';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}return response;}
+async function command(action,body={}){try{const data=await(await api(action,body)).json();pending.add(data.id);notice('Change queued. It will apply after the current folder scan finishes.');return data;}catch(error){notice(error.message,true);return null;}}
+function el(tag,text,className){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;}
+function badge(text,type){return el('span',text,'badge '+(type||''));}
+function sourceErrors(row){return row.sources.map(s=>s.error).filter(Boolean);}
+function cell(row,text,cls){const td=el('td',undefined,cls);if(text instanceof Node)td.append(text);else td.textContent=text||'—';row.append(td);return td;}
+function dateOrder(record){const date=new Date(record.service_date||record.imported);return isNaN(date)?0:date.getTime();}
+function render(){if(!state)return;const all=state.records;const reports=all.filter(r=>r.kind==='reports'),faults=all.filter(r=>r.kind==='screenshots');
+$('stat-reports').textContent=reports.length;$('stat-faults').textContent=faults.length;$('stat-review').textContent=all.filter(r=>r.review!=='Reviewed').length;$('stat-sources').textContent=all.reduce((n,r)=>n+r.sources.length,0);$('count-reports').textContent=reports.length;$('count-faults').textContent=faults.length;
+const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').value;
+let visible=all.filter(r=>r.kind===kind).filter(r=>!query||JSON.stringify(r).toLowerCase().includes(query)).filter(r=>!filter||(filter==='errors'?sourceErrors(r).length:filter==='duplicates'?r.possible_duplicate||r.sources.length>1:r.review===filter)).sort((a,b)=>dateOrder(b)-dateOrder(a));
+const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer / hours','Review / status','Sources','']:['Event date / machine','Error code','Fault name / severity','Description','Impact','Review','Sources',''];
+$('head').replaceChildren();const h=el('tr');headers.forEach(t=>h.append(el('th',t)));$('head').append(h);$('rows').replaceChildren();
+for(const record of visible){const tr=el('tr');const date=el('div',record.service_date||'Date not found');date.append(el('div',kind==='reports'?(record.machine_release?'Release: '+record.machine_release:'Release not stated'):record.machine||'Machine not identified','secondary'));cell(tr,date);
+if(kind==='reports'){
+const wo=el('div',record.work_order||record.document_type||'Report');wo.append(el('div',record.case_number?'Case '+record.case_number:'Case not stated','secondary'));cell(tr,wo);cell(tr,record.category);
+const subject=el('div',record.issue||record.fault_name||'Review source','truncate');if(record.fault_code||record.additional_codes)subject.append(el('div',[record.fault_code,record.additional_codes].filter(Boolean).join(', '),'code'));cell(tr,subject,'text');cell(tr,el('div',record.work_performed||'Work not identified','truncate'),'text');cell(tr,el('div',record.parts_installed||'Not stated','truncate'),'text');
+const eng=el('div',record.engineer||'Not stated');eng.append(el('div',(record.work_hours?record.work_hours+' work hrs':'Hours not stated')+(record.downtime_hours?' · '+record.downtime_hours+' downtime hrs':''),'secondary'));cell(tr,eng);
+}else{const codes=el('div',record.fault_code||'Not identified','code');if(record.additional_codes)codes.append(el('div','Other: '+record.additional_codes,'secondary'));cell(tr,codes);const name=el('div',record.fault_name||'Not identified');name.append(el('div',record.severity,'secondary'));cell(tr,name,'text');cell(tr,el('div',record.issue||'Review original source','truncate'),'text');cell(tr,record.impact);}
+const status=el('div');status.append(badge(record.review,record.review==='Reviewed'?'done':'review'));if(record.service_status&&kind==='reports')status.append(el('div',record.service_status,'secondary'));if(sourceErrors(record).length)status.append(el('div','Import needs attention','secondary'));if(record.possible_duplicate)status.append(el('div','Similar fault — review','secondary'));cell(tr,status);
+cell(tr,record.sources.length+' file'+(record.sources.length===1?'':'s'));const action=el('button','Review','link');action.onclick=()=>openDetail(record.id);cell(tr,action);$('rows').append(tr);
+}
+$('results').textContent=visible.length+' of '+all.filter(r=>r.kind===kind).length+' entries';$('empty').hidden=visible.length>0;$('empty').querySelector('h3').textContent=query||filter?'No matching entries':kind==='reports'?'No service reports yet':'No fault reports yet';
+$('last-scan').textContent=state.last_scan?'Last scan: '+state.last_scan:'No scan completed yet';$('database-path').textContent='Database: '+state.database;
+$('dot').className='dot'+(state.busy?' busy':state.config.running?' active':'');$('monitor-status').textContent=(state.config.running?'Monitoring · ':state.busy?'Scanning · ':'Paused · ')+state.message;
+$('start').textContent=state.config.running?'Save folders & monitor':'Start monitoring';
+}
+async function poll(){if(polling)return;polling=true;try{state=await(await api('state')).json();if(!loaded){$('reports').value=state.config.reports||'';$('screenshots').value=state.config.screenshots||'';loaded=true;}
+if(state.job&&state.job.id!==lastJob){lastJob=state.job.id;if(pending.has(lastJob)){pending.delete(lastJob);notice(state.job.message,!state.job.ok);}}
+render();}catch(error){notice('Cannot reach the local helper. Keep the launcher window open. '+error.message,true);}finally{polling=false;}}
+function chooseTab(next){kind=next;document.querySelectorAll('.tab').forEach(tab=>{const active=tab.dataset.kind===kind;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;});$('report-panel').setAttribute('aria-labelledby',kind==='reports'?'tab-reports':'tab-faults');render();}
+document.querySelectorAll('.tab').forEach(tab=>{tab.onclick=()=>chooseTab(tab.dataset.kind);tab.onkeydown=e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();chooseTab(kind==='reports'?'screenshots':'reports');document.querySelector('.tab[aria-selected=true]').focus();}};});
+function openDetail(id){selected=state.records.find(r=>r.id===id);if(!selected)return;$('detail-title').textContent=(selected.kind==='reports'?'Service report':'Fault report')+' #'+selected.id;$('detail-subtitle').textContent=selected.work_order||selected.fault_name||'Review extracted fields against the source';$('edit-grid').replaceChildren();
+const fields=selected.kind==='reports'?['work_order','case_number','service_date','machine_release','machine','category','document_type','fault_code','additional_codes','engineer','work_hours','downtime_hours','service_status','issue','work_performed','parts_installed','notes']:['service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes'];
+for(const key of fields){const wide=['issue','work_performed','parts_installed','notes','cause','suggestions'].includes(key);const wrap=el('div',undefined,wide?'wide':'');const label=el('label',key==='service_date'&&selected.document_type?.startsWith('PMP')?'Document date':labels[key]);label.htmlFor='edit-'+key;const input=el(wide?'textarea':'input');input.id='edit-'+key;input.name=key;input.value=selected[key]||'';wrap.append(label,input);$('edit-grid').append(wrap);}
+const wrap=el('div');const label=el('label','Review status');label.htmlFor='edit-review';const review=el('select');review.id='edit-review';review.name='review';for(const value of ['Needs review','Reviewed']){const option=el('option',value);review.append(option);}review.value=selected.review;wrap.append(label,review);$('edit-grid').append(wrap);
+const warnings=sourceErrors(selected);if(!selected.fault_code&&selected.kind==='screenshots')warnings.push('Primary error code was not identified. Check the original screenshot.');if(selected.possible_duplicate)warnings.push('Other entries contain a similar fault. Confirm the event times before linking.');$('detail-warning').textContent=warnings.join('\n');$('detail-warning').hidden=!warnings.length;
+$('raw').textContent=selected.text||'No text extracted.';$('source-list').replaceChildren();for(const source of selected.sources){const block=el('div',undefined,'source');const button=el('button','Open source file','link');button.type='button';button.onclick=()=>openSource(source.id);block.append(button,el('small',source.path));$('source-list').append(block);}
+$('merge-target').replaceChildren(el('option','Choose an entry to retain…'));$('merge-target').firstChild.value='';
+for(const row of state.records.filter(r=>r.kind===selected.kind&&r.id!==selected.id)){const option=el('option','#'+row.id+' · '+(row.work_order||row.fault_code||'Unknown code')+' · '+(row.service_date||row.issue||''));option.value=row.id;$('merge-target').append(option);}
+$('detail').showModal();}
+async function openSource(id){const popup=window.open('about:blank','_blank');try{const response=await api('source?id='+id);const blob=await response.blob();const url=URL.createObjectURL(blob);if(popup){popup.opener=null;popup.location=url;}else{const a=el('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();}setTimeout(()=>URL.revokeObjectURL(url),300000);}catch(error){if(popup)popup.close();notice(error.message,true);}}
+async function download(route,filename){try{const response=await api(route);const url=URL.createObjectURL(await response.blob());const a=el('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}catch(error){notice(error.message,true);}}
+$('edit-form').onsubmit=async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.target));const result=await command('update',{id:selected.id,...data});if(result)$('detail').close();};
+$('close').onclick=()=>$('detail').close();$('merge').onclick=async()=>{const target=$('merge-target').value;if(!target)return;const result=await command('merge',{source:selected.id,target:Number(target)});if(result)$('detail').close();};
+$('search').oninput=render;$('review-filter').onchange=render;
+$('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim()});$('pause').onclick=()=>command('pause');$('scan').onclick=()=>command('scan');$('retry').onclick=()=>command('retry');
+$('excel').onclick=async()=>{notice('Downloading the latest completed Excel export. Entries from a scan in progress will appear in the next export.');await download('excel','TrueBeam Service Log.xlsx');};
+$('backup').onclick=()=>download('backup','TrueBeam Service Log.sqlite3');
+document.querySelectorAll('.browse').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await(await api('browse',{})).json();if(result.path)$(button.dataset.for).value=result.path;}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
+if(location.protocol==='file:'||!token){$('launcher').hidden=false;$('workspace').hidden=true;}else{poll();setInterval(poll,2000);}
+</script>
+</body></html>

@@ -1,0 +1,83 @@
+TRUEBEAM SERVICE LOG — LOCAL HTML APPLICATION
+
+1. Extract this entire ZIP to a folder on the UFHPT computer.
+2. Windows: double-click "Start Local App.bat".
+   Mac: double-click "Start Local App.command".
+3. The launcher opens your browser at 127.0.0.1. Keep its console open.
+4. Select the service-report folder and the screenshot folder, then Start monitoring.
+   You can browse to local folders or paste mapped-drive / UNC folder paths.
+5. Use the Service Reports and Fault Reports tabs. Search by code, work order or description.
+6. Review extracted entries against their sources. Edit fields and mark Reviewed.
+7. Back up database downloads a consistent SQLite snapshot. Export Excel downloads the
+   latest completed workbook. Keep the database backup somewhere backed up by your institution.
+
+REQUIREMENTS
+Windows 10/11, Python 3.10+ with pip and Tk support, and a modern browser (Edge or Chrome).
+On first launch, Python dependencies are downloaded. Normal use then needs no internet.
+Screenshot / scanned-PDF OCR on Windows requires Tesseract OCR, installed by IT.
+The app finds tesseract.exe on PATH, in the standard Program Files installation,
+or in an "ocr" subfolder beside this application. An explicit TESSERACT_CMD environment
+variable can also point to the executable. Missing OCR is shown as an import problem;
+install it and choose Retry failed imports.
+macOS uses Apple Vision through Swift (Apple Command Line Tools required).
+
+A single HTML file alone cannot reliably monitor local folders and run this OCR.
+index.html is the interface; web_app.py is the local helper. No hosted server is needed.
+This version is a Python application, not a standalone Windows executable.
+Windows execution and institutional software permissions need checking on the target PC.
+
+OFFLINE DEPLOYMENT FOR IT
+On a connected Windows computer with the same Python version and CPU architecture:
+  py -3 -m pip download -r requirements.txt -d wheels
+Transfer the entire application folder including wheels to the offline computer:
+  py -3 -m venv .venv
+  .venv\Scripts\python.exe -m pip install --no-index --find-links wheels -r requirements.txt
+Install / transfer Tesseract and its English language data separately.
+Then run Start Local App.bat. An approved Python/Tesseract installation may be needed on
+managed computers; the launcher does not install system software or request administrator access.
+
+DATA AND MONITORING
+Database: %LOCALAPPDATA%\.truebeam-service-log\service-log.sqlite3 on Windows.
+On Mac: ~/.truebeam-service-log/service-log.sqlite3.
+Folder settings and the generated Excel workbook are stored alongside the database.
+Override the location with TRUEBEAM_LOG_HOME or:
+  python web_app.py --data-dir "D:\TrueBeamData"
+Keep the database on the local disk; source folders may be network folders.
+Close the earlier desktop app before using this version with the same data directory.
+
+The database persists when the browser closes. Monitoring continues while the launcher runs.
+Closing the launcher stops monitoring. Reopening it reloads saved folder settings.
+A full initial import may take several minutes; progress remains visible and the interface
+can display records already imported. Changes are queued until the current scan completes.
+Use one launcher per database. If port 8765 is busy, close the earlier launcher or run:
+  python web_app.py --port 8766
+
+Supported sources: PDF, DOCX, TXT, PNG, JPEG, TIFF and BMP.
+The existing Excel workbook is not reimported, so generated logs do not feed back into the database.
+PMP checklists and parameter sheets appear as attachment documents, distinct from work orders.
+The app detects labelled report fields; full source wording is available for review.
+Work-order summaries are extracted text, not automatic clinical interpretations.
+Missing fields stay blank. A documented closure summary does not independently establish
+that a machine was clinically released.
+
+Screenshots: only the fault tooltip / dialog and fault-list strip in the supplied dual-monitor
+TrueBeam layout are extracted. Other layouts may need adjustments.
+Patient demographics and the imaging monitor are not intentionally included in screenshot OCR.
+Service reports are read in full locally; originals are never modified or uploaded.
+All linked originals remain in their source folders.
+
+DUPLICATES
+Unchanged files are not reimported. Identical-content files share an entry.
+Matching faults with identical explicit event timestamps share an event.
+Different times remain separate and can be flagged as similar.
+Manually link confirmed duplicates within the same tab, retaining a chosen entry.
+All source paths remain attached. Manual linking currently has no undo control.
+
+SECURITY / BACKUP
+The helper binds only to 127.0.0.1, with a per-launch session token.
+No external scripts, fonts, analytics, APIs, or cloud storage are used by the application.
+The local SQLite database is not password encrypted. Store it using institutional disk
+protection and access controls appropriate for the source material.
+Backup restores are manual: close the launcher, retain the current database as a safety copy,
+then replace service-log.sqlite3 with the backed-up file. Remove stale -wal/-shm files only
+after all application processes are closed.
