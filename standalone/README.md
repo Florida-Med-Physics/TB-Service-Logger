@@ -81,3 +81,5 @@ Tables fit the available width without lateral scrolling. On narrow screens entr
 Table values display as plain text, with secondary details and status badges. Click a short value to edit it; leave the field or press Enter to save, or Escape to cancel. Longer descriptions open in the full-text pop-up. Input controls appear only while editing.
 
 Error codes and engineer/hours display as a single compact line without extra empty rows. Click the combined value to edit its fields. Empty cells display a hyphen (-).
+
+Fault Reports have no Status column. OUR SOLUTION is a separate editable field for your team’s actual fix, saved independently of SUGGESTED SOLUTION and included in CSV and Excel reports. Click its preview to enter or edit the fix.
