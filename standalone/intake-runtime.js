@@ -92,7 +92,7 @@ async function initIntake(){
  actions.prepend(add,importButton,details,input);
  const {dialog,body}=intakeDialog('therapist-fault','Add therapist fault');
  const form=el('form');form.id='therapist-fault-form';const grid=el('div',undefined,'edit-grid');
- for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','OUR SOLUTION (if fixed)','textarea'],['notes','Notes','textarea']]){
+ for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea'],['notes','Notes','textarea']]){
   const wrap=el('div',undefined,type==='textarea'?'wide':'');const labelNode=el('label',label);labelNode.htmlFor='therapist-'+key;
   const control=el(type==='textarea'?'textarea':'input');control.id='therapist-'+key;control.name=key;if(type!=='textarea')control.type=type;
   if(['service_date','worker_initials','issue'].includes(key))control.required=true;

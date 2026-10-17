@@ -29,7 +29,7 @@ function excelWorkbook(records){
  ['xl/_rels/workbook.xml.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
  ['xl/styles.xml',styles],
  ['xl/worksheets/sheet1.xml',sheet('Service Reports',['Malfunction Start','Machine Release','Work Order #','Case #','Category','Subject / Fault Codes','Summary of Work','Parts Installed','Field Engineer','Total Work Hrs','Agreed Downtime Hrs','Status','Follow-up / Notes','Source Report'],[12,12,15,11,18,26,70,32,13,10,11,14,34,22],service)],
- ['xl/worksheets/sheet2.xml',sheet('Fault Reports',['Event Date','Error Code','Additional Codes','Fault Name','Severity','Error Details','SUGGESTED SOLUTION','OUR SOLUTION','Worker Initials','Notes','Source Screenshots'],[20,15,18,32,14,70,70,50,16,34,32],faults)]
+ ['xl/worksheets/sheet2.xml',sheet('Fault Reports',['Event Date','Error Code','Additional Codes','Fault Name','Severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Notes','Source Screenshots'],[20,15,18,32,14,70,70,50,16,34,32],faults)]
  ]);
 }
 function excelStatus(message,error=false){const node=$('excel-status');if(node){node.textContent=message;node.style.color=error?'#b23b31':'';}}

@@ -1018,7 +1018,7 @@ function excelWorkbook(records){
  ['xl/_rels/workbook.xml.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
  ['xl/styles.xml',styles],
  ['xl/worksheets/sheet1.xml',sheet('Service Reports',['Malfunction Start','Machine Release','Work Order #','Case #','Category','Subject / Fault Codes','Summary of Work','Parts Installed','Field Engineer','Total Work Hrs','Agreed Downtime Hrs','Status','Follow-up / Notes','Source Report'],[12,12,15,11,18,26,70,32,13,10,11,14,34,22],service)],
- ['xl/worksheets/sheet2.xml',sheet('Fault Reports',['Event Date','Error Code','Additional Codes','Fault Name','Severity','Error Details','SUGGESTED SOLUTION','OUR SOLUTION','Worker Initials','Notes','Source Screenshots'],[20,15,18,32,14,70,70,50,16,34,32],faults)]
+ ['xl/worksheets/sheet2.xml',sheet('Fault Reports',['Event Date','Error Code','Additional Codes','Fault Name','Severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Notes','Source Screenshots'],[20,15,18,32,14,70,70,50,16,34,32],faults)]
  ]);
 }
 function excelStatus(message,error=false){const node=$('excel-status');if(node){node.textContent=message;node.style.color=error?'#b23b31':'';}}
@@ -1145,7 +1145,7 @@ async function initIntake(){
  actions.prepend(add,importButton,details,input);
  const {dialog,body}=intakeDialog('therapist-fault','Add therapist fault');
  const form=el('form');form.id='therapist-fault-form';const grid=el('div',undefined,'edit-grid');
- for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','OUR SOLUTION (if fixed)','textarea'],['notes','Notes','textarea']]){
+ for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea'],['notes','Notes','textarea']]){
   const wrap=el('div',undefined,type==='textarea'?'wide':'');const labelNode=el('label',label);labelNode.htmlFor='therapist-'+key;
   const control=el(type==='textarea'?'textarea':'input');control.id='therapist-'+key;control.name=key;if(type!=='textarea')control.type=type;
   if(['service_date','worker_initials','issue'].includes(key))control.required=true;
@@ -1189,7 +1189,7 @@ function cell(row,text,cls){const td=el('td',undefined,cls);if(text instanceof N
 
 const SORT_OPTIONS={
  reports:[['service_date','Start date','date'],['machine_release','Release date','date'],['work_order','Work order'],['case_number','Case number'],['category','Category'],['issue','Subject'],['work_performed','Summary of work'],['parts_installed','Parts installed'],['fault_code','Error code'],['engineer','Engineer'],['work_hours','Work hours','number'],['downtime_hours','Downtime hours','number'],['review','Status'],['sources','Source count','number']],
- screenshots:[['service_date','Event date','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','SUGGESTED SOLUTION'],['work_performed','OUR SOLUTION'],['worker_initials','Worker Initials'],['sources','Source count','number']]
+ screenshots:[['service_date','Event date','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','SUGGESTED SOLUTION'],['work_performed','Resolution'],['worker_initials','Worker Initials'],['sources','Source count','number']]
 };
 let tableSort={reports:{key:'service_date',direction:'desc'},screenshots:{key:'service_date',direction:'desc'}};
 try{const saved=JSON.parse(localStorage.getItem('truebeam-table-sort'));for(const tab of Object.keys(tableSort))if(saved?.[tab]&&SORT_OPTIONS[tab].some(o=>o[0]===saved[tab].key)&&['asc','desc'].includes(saved[tab].direction))tableSort[tab]=saved[tab];}catch{}
@@ -1208,7 +1208,7 @@ function syncSortControls(){
  $('sort-direction').setAttribute('aria-label','Reverse sort direction');
  $('download-table').textContent=kind==='reports'?'Download service table':'Download fault table';
 }
-function fieldLabel(key,tab=kind){return tab==='screenshots'?({issue:'Error Details',suggestions:'SUGGESTED SOLUTION',work_performed:'OUR SOLUTION',worker_initials:'Worker Initials'}[key]||labels[key]):labels[key];}
+function fieldLabel(key,tab=kind){return tab==='screenshots'?({issue:'Error Details',suggestions:'SUGGESTED SOLUTION',work_performed:'Resolution',worker_initials:'Worker Initials'}[key]||labels[key]):labels[key];}
 function downloadDisplayedTable(){
  const keys=kind==='reports'?['service_date','machine_release','work_order','case_number','category','fault_code','additional_codes','issue','work_performed','parts_installed','engineer','work_hours','downtime_hours','service_status','notes']:['service_date','fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','notes'];
  const records=displayedRecords(),rows=[['Entry ID',...keys.map(k=>fieldLabel(k)),...(kind==='reports'?['Status']:[]),'Source count','Source files','Import problems'],...records.map(r=>[r.id,...keys.map(k=>r[k]??''),...(kind==='reports'?[r.review]:[]),r.sources.length,r.sources.map(s=>s.path).join('\n'),sourceErrors(r).join('\n')])];
@@ -1270,7 +1270,7 @@ function render(){if(!state||document.activeElement?.classList.contains("inline-
 $('stat-reports').textContent=reports.length;$('stat-faults').textContent=faults.length;$('stat-review').textContent=all.filter(r=>r.review!=='Reviewed').length;$('stat-sources').textContent=all.reduce((n,r)=>n+r.sources.length,0);$('count-reports').textContent=reports.length;$('count-faults').textContent=faults.length;
 const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').value;
 let visible=displayedRecords();syncSortControls();
-const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer / hours','Status','Service report']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','OUR SOLUTION','Worker Initials','Screenshot'];
+const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer / hours','Status','Service report']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Screenshot'];
 $('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','work_performed','parts_installed','engineer','review','sources']:['service_date','fault_code','fault_name','issue','suggestions','work_performed','worker_initials','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
 
 for(const record of visible){
