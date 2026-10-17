@@ -1,16 +1,6 @@
-name: Build Windows application
+name: Legacy Tk application (archived)
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'desktop_app.py'
-      - 'desktop_worker.py'
-      - 'report_export.py'
-      - 'core.py'
-      - 'screenshot.py'
-      - 'build_desktop.py'
-      - 'requirements*.txt'
-      - '.github/workflows/desktop.yml'
 jobs:
   windows:
     runs-on: windows-latest

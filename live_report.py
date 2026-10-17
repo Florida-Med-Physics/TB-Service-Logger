@@ -37,7 +37,7 @@ def csv_data(records,columns):
             row.append(text)
         writer.writerow(row)
     return ('\ufeff'+stream.getvalue()).encode('utf-8')
-def create_live_workbook(records,output,feeds):
+def create_live_workbook(records,output,feeds,live=True):
     from openpyxl import Workbook
     from openpyxl.styles import Font,PatternFill,Alignment
     from openpyxl.utils import get_column_letter
@@ -46,18 +46,19 @@ def create_live_workbook(records,output,feeds):
     for i,(kind,title,columns) in enumerate([('reports','Service Reports',SERVICE),('screenshots','Fault Reports',FAULT)],1):
         ws=wb.create_sheet(title);ws.sheet_view.showGridLines=False
         ws.append(['TrueBeam — '+title]);ws['A1'].font=Font(name='Arial',size=14,bold=True)
-        ws.append(['Live report: data refreshes every minute. Make edits in the shared app. Enable external-data refresh in Excel if prompted.'])
+        ws.append(['Live report: data refreshes every minute. Make edits in the shared app. Enable external-data refresh in Excel if prompted.' if live else 'Exported snapshot of the current TrueBeam service and fault log.'])
         ws['A2'].font=Font(name='Arial',size=9,color='595959');ws.append([])
         ws.append([name for _,name in columns])
         rows=[r for r in records if r['kind']==kind]
         for r in rows:ws.append([data_value(r,key) for key,_ in columns])
         if not rows:ws.append(['']*len(columns))
-        table=Table(displayName='TrueBeamLive'+str(i),tableType='queryTable',connectionId=i,ref='A4:'+get_column_letter(len(columns))+str(ws.max_row))
+        table=Table(displayName='TrueBeamLive'+str(i),ref='A4:'+get_column_letter(len(columns))+str(ws.max_row))
+        if live:table.tableType='queryTable';table.connectionId=i
         table.tableStyleInfo=TableStyleInfo(name='TableStyleMedium2',showRowStripes=True)
         table._initialise_columns()
         for index,(_,name) in enumerate(columns):
             table.tableColumns[index].name=name
-            table.tableColumns[index].queryTableFieldId=index+1
+            if live:table.tableColumns[index].queryTableFieldId=index+1
         ws.add_table(table);ws.freeze_panes='A5'
         for c in ws[4]:
             c.fill=PatternFill('solid',fgColor='1F4E78');c.font=Font(name='Arial',bold=True,color='FFFFFF');c.alignment=Alignment(wrap_text=True)
@@ -67,6 +68,8 @@ def create_live_workbook(records,output,feeds):
     fd,tmp=tempfile.mkstemp(dir=output.parent,suffix='.xlsx');os.close(fd)
     try:
         wb.save(tmp)
+        if not live:
+            os.replace(tmp,output);return
         with zipfile.ZipFile(tmp) as z:parts={n:z.read(n) for n in z.namelist()}
         style=ET.fromstring(parts['xl/styles.xml'])
         font_order=['b','i','strike','condense','extend','outline','shadow','u','vertAlign','sz','color','name','family','charset','scheme']

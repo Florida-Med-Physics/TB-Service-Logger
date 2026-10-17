@@ -17,3 +17,6 @@ build-html/
 
 dist-shared/
 build-shared/
+
+dist-native/
+build-native/

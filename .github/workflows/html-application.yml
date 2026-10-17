@@ -1,13 +1,6 @@
-name: Build HTML application
+name: Legacy browser launcher (archived)
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'html_application.py'
-      - 'build_html_application.py'
-      - 'verify_html_application.py'
-      - 'standalone/TrueBeam-Local.html'
-      - '.github/workflows/html-application.yml'
 jobs:
   windows:
     runs-on: windows-latest

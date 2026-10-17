@@ -147,7 +147,11 @@ class SharedService:
             self.mirror();return {'ok':True,'id':cur.lastrowid,'error':error}
         finally:e.db.close()
     def configure(self,payload):
-        with self.scan_lock:self.engine.configure(payload);self.last_scan=-5;self.next_report=0
+        with self.scan_lock:
+            self.engine.configure(payload)
+            self.engine.config['running']=bool(payload.get('running',True))
+            self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
+            self.last_scan=-5;self.next_report=0
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
     def tick(self):

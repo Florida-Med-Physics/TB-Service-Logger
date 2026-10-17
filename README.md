@@ -1,3 +1,26 @@
+# TrueBeam Service Log — native desktop application
+
+Download the **native Windows or Mac application** from the [native desktop release](https://github.com/Florida-Med-Physics/TB-Service-Logger/releases/tag/v1.2.0-native-test.1).
+
+The app opens directly in its own desktop window with the UF Proton icon. Its interface uses native Qt controls; it does not open a browser or load an HTML page.
+
+- Windows: extract **TrueBeam-Native-Windows.zip**, then run **TrueBeam Service Log.exe** with its **_internal** folder beside it.
+- Mac (Apple Silicon): extract **TrueBeam-Native-Mac.zip**, then open **TrueBeam Service Log.app**.
+- Service Reports and Fault Reports are separate tabs. Double-click values to view/edit, and attached PDFs/PNGs to open in the default viewer.
+- Shared UFHPTI paths are preset. The first Windows instance hosts the shared log; keep it running for other staff. Without a shared drive, the app opens a local workspace.
+- The app saves edits immediately. Background Excel feeds publish every minute without replacing an open workbook. **Export Report** writes a fresh standalone snapshot.
+- Builds are unsigned; network deployment and automatic Excel refresh still need UFHPTI confirmation.
+
+Older HTML/browser launchers and the earlier Tk interface remain in source for reference. Use the **Native** downloads above.
+
+## Development
+
+Install requirements-native.txt, then run python native_application.py --local.
+Build on the destination OS with python build_native_application.py.
+Run python verify_native_application.py to verify the packaged native interface.
+
+---
+
 # TrueBeam Service Log
 
 ## Executable with the current HTML design\n\nThe current packaging uses html_application.py and build_html_application.py. It launches the existing HTML interface unchanged in Chrome or Edge and does not show the earlier native layout. Build on the target OS with python build_html_application.py; verify the embedded HTML with python verify_html_application.py. The Build HTML application workflow provides the Windows package. Read HTML APPLICATION START HERE.txt for usage and current local-only limitations.\n\n## Local HTML — current interface\n\nOpen standalone/TrueBeam-Local.html in desktop Chrome or Edge. The HTML interface includes folder monitoring, Import files as a standard-file fallback, Import details for diagnostics, and Add fault for therapist entries with optional screenshots. See standalone/README.md. The same Excel output re-saves every minute while the page is open.\n\n## Native desktop application — alternate

@@ -1,0 +1,20 @@
+TrueBeam Service Log - native desktop application
+
+WINDOWS
+Extract the entire ZIP. Open TrueBeam Service Log.exe. Keep the _internal folder beside it. The UF Proton icon appears on the executable and application window. No HTML file or browser is used for the application interface.
+Connect U: and W: before opening the app on the UFHPTI network. The first Windows app hosts the shared database; keep its window/computer running for other staff.
+If U: is unavailable, the app opens a local workspace. Select Connection > Connect to shared UFHPTI log to remember the shared TrueBeamApp folder, then restart.
+
+MAC (Apple Silicon)
+Extract the ZIP and open TrueBeam Service Log.app. It opens a local workspace unless a shared folder has been selected. Connection > Connect to shared UFHPTI log selects the mounted TrueBeamApp folder; restart to connect. For shared use a Windows host must already be running.
+
+SHARED PATHS
+U:\QA\SystemQA\LINAC QA\TrueBeam\Service reports
+W:\Varian\Transfer\TDS\H192905\PrintScreen
+Excel report: U:\QA\SystemQA\LINAC QA\TrueBeam\TrueBeam_Service_Log.xlsx
+Shared database/discovery: U:\QA\SystemQA\LINAC QA\TrueBeam\TrueBeamApp
+
+Double-click a cell to see and edit its full text. Double-click an attached filename to open its PDF or image in the computer's default viewer.
+Use Add fault for therapist entries; Folder settings remembers paths. Export Report saves a current Excel snapshot. The background Excel data feeds update every minute without replacing an open workbook. Excel external-data refresh must be enabled; live Excel refresh still needs confirmation on the UFHPTI computer.
+
+These apps are unsigned and may require UFHPTI IT approval. If security software removes an executable, ask IT to review the detection. Do not bypass security policy.
