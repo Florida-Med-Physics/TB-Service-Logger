@@ -1,0 +1,294 @@
+"""UFHPTI internal shared host for the existing, unchanged HTML interface."""
+import argparse, base64, hashlib, ipaddress, json, mimetypes, os, secrets, socket, sqlite3, subprocess, sys, tempfile, threading, time, uuid, webbrowser
+from contextlib import closing
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+from core import Engine, FIELDS, SUPPORTED, extract, parse
+from live_report import publish_report
+
+BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent))
+DEFAULTS={
+ 'reports':r'U:\QA\SystemQA\LINAC QA\TrueBeam\Service reports',
+ 'screenshots':r'W:\Varian\Transfer\TDS\H192905\PrintScreen',
+ 'output':r'U:\QA\SystemQA\LINAC QA\TrueBeam\TrueBeam_Service_Log.xlsx',
+ 'running':True}
+def default_home():
+    return Path(os.environ.get('TRUEBEAM_SHARED_HOME',str(Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'.truebeam-shared-log')))
+class Conflict(ValueError):pass
+class SharedService:
+    def __init__(self,home,clock=time.monotonic,defaults=None,shared_dir=None):
+        self.home=Path(home);self.home.mkdir(parents=True,exist_ok=True)
+        self.shared_dir=Path(shared_dir) if shared_dir else None;self.mirror_lock=threading.Lock()
+        self.storage_root=self.shared_dir/'files' if self.shared_dir else self.home
+        self.clock=clock;self.stop=threading.Event();self.next_report=0;self.last_report=None
+        self.snapshot={'busy':False,'message':'Shared UFHPTI database ready.','last_scan':None}
+        self.scan_lock=threading.Lock();self.engine=Engine(self.home)
+        if self.shared_dir and (self.shared_dir/'settings.json').exists():
+            self.engine.config=json.loads((self.shared_dir/'settings.json').read_text())
+            self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
+        if not self.engine.config_path.exists():
+            self.engine.config=dict(defaults or DEFAULTS)
+            self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
+        if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
+        with self.connection() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS attachments(id INTEGER PRIMARY KEY,record_id INTEGER,name TEXT,path TEXT)')
+            db.execute('CREATE TABLE IF NOT EXISTS overrides(record_id INTEGER,field TEXT,value TEXT,PRIMARY KEY(record_id,field))')
+            db.commit()
+        key=self.home/'access-key'
+        if not key.exists():
+            fd=os.open(key,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+            with os.fdopen(fd,'w') as f:f.write(secrets.token_urlsafe(32))
+        self.token=key.read_text().strip()
+        self.engine.progress=lambda p:self.snapshot.update(message='Reading '+p.name)
+        self.engine.apply_overrides=self.apply_overrides
+        self.thread=threading.Thread(target=self.worker,daemon=True);self.last_scan=-5
+    def mirror(self):
+        if not self.shared_dir:return
+        import shutil
+        with self.mirror_lock:
+            fd,local=tempfile.mkstemp(dir=self.home,suffix='.sqlite3');os.close(fd)
+            fd,remote=tempfile.mkstemp(dir=self.shared_dir,suffix='.sqlite3');os.close(fd)
+            try:
+                with self.connection() as source:
+                    with closing(sqlite3.connect(local)) as target:source.backup(target)
+                shutil.copyfile(local,remote)
+                os.replace(remote,self.shared_dir/'shared-data.sqlite3')
+            finally:
+                for path in (local,remote):
+                    if os.path.exists(path):os.unlink(path)
+    def apply_overrides(self,path):
+        row=self.engine.db.execute('SELECT id FROM records WHERE path=?',(str(path),)).fetchone()
+        if row:
+            for field,value in self.engine.db.execute('SELECT field,value FROM overrides WHERE record_id=?',(row[0],)).fetchall():
+                if field in FIELDS:self.engine.db.execute('UPDATE records SET '+field+'=? WHERE id=?',(value,row[0]))
+    def connection(self):
+        return closing(sqlite3.connect(self.home/'service-log.sqlite3',timeout=30))
+    def reader(self):return Engine(self.home)
+    def state(self):
+        e=self.reader()
+        try:
+            records=e.events()
+            with self.connection() as db:attachments=db.execute('SELECT id,record_id,name FROM attachments ORDER BY id').fetchall()
+            for r in records:
+                ids=[s['id'] for s in r['sources']];r['recordIds']=ids
+                if r['document_type']=='Therapist entry':
+                    r['entryType']='manual'
+                    r['sources']=[{'id':'a:'+str(a),'path':n,'error':''} for a,rid,n in attachments if rid in ids]
+            return dict(self.snapshot,records=records,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,database='Shared UFHPTI host database · edits save immediately.',shared=True)
+        finally:e.db.close()
+    def update(self,payload):
+        field=payload.get('field')
+        if field not in FIELDS:raise ValueError('Unknown field.')
+        e=self.reader()
+        try:
+            e.db.execute('BEGIN IMMEDIATE')
+            event=next((r for r in e.events() if r['id']==int(payload['id'])),None)
+            if not event:raise ValueError('Entry no longer exists.')
+            current=event.get(field,'') or ''
+            if field=='service_status':current=current or event['review']
+            if str(payload.get('expected','') or '')!=current:
+                raise Conflict('Someone else changed this value. Your edit was not applied. Reload, check their value, and reapply your change if appropriate.')
+            value=str(payload.get('value','')).strip()
+            for source in event['sources']:
+                e.db.execute('UPDATE records SET '+field+'=? WHERE id=?',(value,source['id']))
+                e.db.execute('INSERT OR REPLACE INTO overrides VALUES(?,?,?)',(source['id'],field,value))
+            e.db.commit();self.mirror();return {'ok':True}
+        except Exception:e.db.rollback();raise
+        finally:e.db.close()
+    def add_fault(self,payload):
+        fields=dict.fromkeys(FIELDS,'')
+        for k in ('service_date','worker_initials','fault_code','fault_name','issue','work_performed'):fields[k]=str(payload.get(k,'')).strip()
+        if not all(fields[k] for k in ('service_date','worker_initials','issue')):raise ValueError('Event time, initials and Error Details are required.')
+        fields['worker_initials']=fields['worker_initials'].upper()[:12];fields['document_type']='Therapist entry'
+        items=payload.get('attachments',[]);prepared=[]
+        for item in items:
+            name=Path(str(item.get('name','screenshot.png')).replace('\\','/')).name
+            if Path(name).suffix.lower() not in {'.png','.jpg','.jpeg','.bmp','.webp'}:raise ValueError('Attach image files only.')
+            data=base64.b64decode(item['data'],validate=True)
+            if len(data)>20000000:raise ValueError('Each attachment must be under 20 MB.')
+            prepared.append((name,data))
+        folder=self.storage_root/'attachments';folder.mkdir(parents=True,exist_ok=True);written=[];committed=False
+        try:
+            with self.connection() as db:
+                columns=['path','kind','digest','imported','text','error','review','extractor_version']+FIELDS
+                values=['therapist://'+str(uuid.UUID(payload.get('requestId',str(uuid.uuid4())))),'screenshots',uuid.uuid4().hex,time.strftime('%Y-%m-%dT%H:%M:%S'),'','','Closure documented','manual']+[fields[k] for k in FIELDS]
+                old=db.execute('SELECT id FROM records WHERE path=?',(values[0],)).fetchone()
+                if old:self.mirror();return {'ok':True,'id':old[0]}
+                cur=db.execute('INSERT INTO records('+','.join(columns)+') VALUES('+','.join('?' for _ in columns)+')',values);rid=cur.lastrowid
+                for name,data in prepared:
+                    path=folder/(uuid.uuid4().hex+Path(name).suffix.lower());path.write_bytes(data);written.append(path)
+                    db.execute('INSERT INTO attachments(record_id,name,path) VALUES(?,?,?)',(rid,name,str(path)))
+                db.commit();committed=True
+            self.mirror();return {'ok':True,'id':rid}
+        except Exception:
+            if not committed:
+                for path in written:path.unlink(missing_ok=True)
+            raise
+    def upload(self,payload):
+        name=Path(str(payload.get('name','')).replace('\\','/')).name
+        if Path(name).suffix.lower() not in SUPPORTED:raise ValueError('Unsupported file type.')
+        data=base64.b64decode(payload['data'],validate=True)
+        if len(data)>25000000:raise ValueError('Select a file under 25 MB.')
+        digest=hashlib.sha256(data).hexdigest();folder=self.storage_root/'uploads';folder.mkdir(parents=True,exist_ok=True)
+        path=folder/(digest[:16]+'-'+name);path.write_bytes(data)
+        kind='screenshots' if Path(name).suffix.lower() in {'.png','.jpg','.jpeg','.bmp','.webp','.tif','.tiff'} else 'reports'
+        text='';error=''
+        try:text=extract(path).strip()
+        except Exception as exc:error=str(exc)
+        fields=parse(text);e=self.reader()
+        try:
+            e.db.execute('BEGIN IMMEDIATE')
+            old=e.db.execute('SELECT * FROM records WHERE path=?',(str(path),)).fetchone()
+            if old:return {'ok':True,'id':old['id'],'error':old['error']}
+            columns=['path','kind','digest','imported','text','error','review','extractor_version']+FIELDS
+            values=[str(path),kind,digest,time.strftime('%Y-%m-%dT%H:%M:%S'),text,error,'Closure documented','shared-upload']+[fields[k] for k in FIELDS]
+            cur=e.db.execute('INSERT INTO records('+','.join(columns)+') VALUES('+','.join('?' for _ in columns)+')',values);e.db.commit()
+            self.mirror();return {'ok':True,'id':cur.lastrowid,'error':error}
+        finally:e.db.close()
+    def configure(self,payload):
+        with self.scan_lock:self.engine.configure(payload);self.last_scan=-5;self.next_report=0
+        if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
+        return {'ok':True}
+    def tick(self):
+        if self.engine.config.get('running') and self.clock()-self.last_scan>=5:
+            with self.scan_lock:
+                self.snapshot.update(busy=True,message='Checking host folders…')
+                try:
+                    self.engine.scan(auto_export=False)
+                    # Reapply persisted edits, including intentionally empty values.
+                    with self.connection() as db:
+                        for rid,field,value in db.execute('SELECT record_id,field,value FROM overrides').fetchall():
+                            if field in FIELDS:db.execute('UPDATE records SET '+field+'=? WHERE id=?',(value,rid))
+                        db.commit()
+                    if self.engine.dirty:self.mirror();self.engine.dirty=False
+                    self.snapshot.update(message=self.engine.message or 'Host folders checked.')
+                finally:self.snapshot.update(busy=False,last_scan=time.strftime('%Y-%m-%d %H:%M:%S'));self.last_scan=self.clock()
+        if self.engine.config.get('output') and self.clock()>=self.next_report:
+            try:
+                publish_report(self.state()['records'],Path(self.engine.config['output']))
+                self.last_report=time.strftime('%Y-%m-%d %H:%M:%S')
+                self.snapshot.update(message='Report data published '+self.last_report+'. Open Excel workbooks are not replaced.')
+                self.next_report=self.clock()+60
+            except Exception as e:self.snapshot.update(message='Report data pending: '+str(e)+'. App edits are saved.');self.next_report=self.clock()+10
+    def worker(self):
+        while not self.stop.wait(.25):
+            try:self.tick()
+            except Exception as e:self.last_scan=self.clock();self.snapshot.update(busy=False,message='Monitoring needs attention: '+str(e))
+    def close(self):
+        self.stop.set()
+        if self.thread.is_alive():self.thread.join(timeout=130)
+        self.engine.db.close()
+
+class Server(ThreadingHTTPServer):
+    daemon_threads=True
+    def __init__(self,address,service):
+        self.service=service;super().__init__(address,Handler)
+        self.allowed_hosts={'localhost','127.0.0.1',socket.gethostname().lower(),socket.getfqdn().lower()}
+        try:self.allowed_hosts.update(socket.gethostbyname_ex(socket.gethostname())[2])
+        except OSError:pass
+    def valid_host(self,host):
+        try:
+            parsed=urlsplit('http://'+host)
+            return parsed.hostname in self.allowed_hosts and parsed.port==self.server_port
+        except ValueError:return False
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self,*args):pass
+    def respond(self,status,data,kind='application/json'):
+        if kind=='application/json':data=json.dumps(data,ensure_ascii=False).encode()
+        self.send_response(status);self.send_header('Content-Type',kind);self.send_header('Content-Length',str(len(data)))
+        self.send_header('Cache-Control','no-store');self.send_header('Referrer-Policy','no-referrer');self.send_header('X-Content-Type-Options','nosniff')
+        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.end_headers()
+        try:self.wfile.write(data)
+        except ConnectionError:pass
+    def authorized(self):
+        try:internal=ipaddress.ip_address(self.client_address[0]).is_private
+        except ValueError:internal=False
+        return internal and self.server.valid_host(self.headers.get('Host','')) and secrets.compare_digest(self.headers.get('X-Local-Token',''),self.server.service.token)
+    def local_admin(self):return self.client_address[0] in ('127.0.0.1','::1')
+    def do_GET(self):
+        route=urlsplit(self.path)
+        if not self.server.valid_host(self.headers.get('Host','')):return self.respond(403,{'error':'Use the UFHPTI host app address.'})
+        if route.path=='/':
+            page=(BASE/'index.html').read_text()
+            page=page.replace("if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});","if(typeof sharedSaveField==='function')await sharedSaveField(record,field,value);else if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});")
+            page=page.replace("poll();setInterval(poll,2000);","window.addEventListener('DOMContentLoaded',initShared);",1)
+            page=page.replace("<script>\n'use strict';","<script src=\"/shared-client.js\"></script><script>\n'use strict';")
+            page=page.replace('Local database · files stay on this computer','Shared UFHPTI app')
+            page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Edits save to the shared database. Excel refreshes report data without replacing the open workbook.')
+            return self.respond(200,page.encode(),'text/html; charset=utf-8')
+        if route.path=='/shared-client.js':return self.respond(200,(BASE/'shared-client.js').read_bytes(),'text/javascript; charset=utf-8')
+        if route.path=='/favicon.ico':return self.respond(204,b'','image/x-icon')
+        if not self.authorized():return self.respond(403,{'error':'Open the access link provided by the UFHPTI host.'})
+        s=self.server.service
+        try:
+            if route.path=='/api/health':return self.respond(200,{'ok':True})
+            if route.path=='/api/state':return self.respond(200,dict(s.state(),admin=self.local_admin()))
+            if route.path=='/api/source':
+                source=parse_qs(route.query).get('id',[''])[0]
+                with s.connection() as db:
+                    row=db.execute('SELECT path FROM '+('attachments' if source.startswith('a:') else 'records')+' WHERE id=?',(int(source[2:] if source.startswith('a:') else source),)).fetchone()
+                if not row or not Path(row[0]).is_file():raise ValueError('Original file unavailable on the host.')
+                path=Path(row[0]);return self.respond(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+            if route.path=='/api/excel':
+                path=Path(s.engine.config['output'])
+                if not path.is_file():raise ValueError('Report not created. Check the shared report folder on the host.')
+                return self.respond(200,path.read_bytes(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            return self.respond(404,{'error':'Not found.'})
+        except (ValueError,OSError) as e:return self.respond(400,{'error':str(e)})
+    def do_POST(self):
+        if not self.authorized():return self.respond(403,{'error':'UFHPTI shared app access required.'})
+        origin=self.headers.get('Origin')
+        if origin and origin!='http://'+self.headers.get('Host'):return self.respond(403,{'error':'Open this action within the app.'})
+        try:
+            size=int(self.headers.get('Content-Length',0))
+            if size<0 or size>40000000:return self.respond(413,{'error':'Select files under 25 MB.'})
+            body=json.loads(self.rfile.read(size) or b'{}')
+            if not isinstance(body,dict):raise ValueError('Invalid request.')
+            route=urlsplit(self.path).path.removeprefix('/api/');s=self.server.service
+            if route in ('configure','pause','export','retry','browse') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
+            if route=='browse':
+                command=[sys.executable,'--pick-folder'] if getattr(sys,'frozen',False) else [sys.executable,str(BASE/'shared_application.py'),'--pick-folder']
+                with tempfile.TemporaryDirectory() as picker_dir:
+                    picker_path=Path(picker_dir)/'selected.txt'
+                    picked=subprocess.run(command+['--picker-result',str(picker_path)],capture_output=True,text=True,timeout=120)
+                    if picked.returncode:raise ValueError('Paste the host folder path into the field.')
+                    result={'path':picker_path.read_text() if picker_path.exists() else ''}
+            elif route=='inline-update':result=s.update(body)
+            elif route=='add-fault':result=s.add_fault(body)
+            elif route=='upload':result=s.upload(body)
+            elif route=='configure':result=s.configure(body)
+            elif route=='pause':
+                with s.scan_lock:s.engine.config['running']=False;s.engine.config_path.write_text(json.dumps(s.engine.config,indent=2))
+                result={'ok':True}
+            elif route in ('scan','retry'):
+                if route=='retry':
+                    with s.connection() as db:db.execute("UPDATE records SET extractor_version='' WHERE error<>''");db.commit()
+                s.last_scan=-5;result={'ok':True}
+            elif route=='export':s.next_report=0;result={'ok':True}
+            else:return self.respond(404,{'error':'Unknown action.'})
+            return self.respond(200,result)
+        except Conflict as e:return self.respond(409,{'error':str(e)})
+        except (ValueError,OSError,KeyError,TypeError) as e:return self.respond(400,{'error':str(e)})
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--data-dir',default=str(default_home()))
+    parser.add_argument('--port',type=int,default=8766);parser.add_argument('--host',default='127.0.0.1')
+    parser.add_argument('--share-ufhpti',action='store_true',help='Enable authorized UFHPTI internal-network sharing.')
+    parser.add_argument('--no-browser',action='store_true');parser.add_argument('--self-test-report')
+    args=parser.parse_args()
+    if args.self_test_report:
+        from desktop_app import main as desktop_test
+        sys.argv=[sys.argv[0],'--self-test-report',args.self_test_report];desktop_test();return
+    service=SharedService(args.data_dir)
+    address='0.0.0.0' if args.share_ufhpti else args.host
+    server=Server((address,args.port),service);service.thread.start()
+    local='http://127.0.0.1:'+str(server.server_port)+'/#'+service.token
+    shared='http://'+socket.gethostname()+':'+str(server.server_port)+'/#'+service.token
+    (service.home/'Shared app link.txt').write_text(shared+'\nUFHPTI internal staff only. Keep the host running.')
+    if not args.no_browser:webbrowser.open(local)
+    try:server.serve_forever(poll_interval=.5)
+    except KeyboardInterrupt:pass
+    finally:server.server_close();service.close()
+if __name__=='__main__':main()

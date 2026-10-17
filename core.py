@@ -199,6 +199,7 @@ class Engine:
                         columns = ['path','kind','digest','imported','text','error','review','extractor_version']+FIELDS
                         values = [str(path),key,digest,datetime.now().isoformat(timespec='seconds'),text,error,'Closure documented',EXTRACTOR_VERSION]+[fields[k] for k in FIELDS]
                         self.db.execute('INSERT INTO records ('+','.join(columns)+') VALUES ('+','.join('?' for _ in columns)+') ON CONFLICT(path) DO UPDATE SET '+','.join(k+'=excluded.'+k for k in columns if k!='path'), values)
+                        if callable(getattr(self,'apply_overrides',None)):self.apply_overrides(path)
                         self.db.commit()
                         self.dirty = True
                     except (OSError, sqlite3.Error) as exc:
