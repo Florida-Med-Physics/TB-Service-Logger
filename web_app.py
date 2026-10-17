@@ -4,6 +4,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 from core import Engine, FIELDS
+from contextlib import closing
 
 BASE=Path(__file__).resolve().parent
 
@@ -132,7 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.path=='/api/backup':
                 fd,name=tempfile.mkstemp(suffix='.sqlite3');os.close(fd)
                 try:
-                    with sqlite3.connect(name) as dest:
+                    with closing(sqlite3.connect(name)) as dest:
                         with self.server.service.read_lock:self.server.service.reader.db.backup(dest)
                     return self.respond(200,Path(name).read_bytes(),'application/octet-stream','TrueBeam Service Log.sqlite3')
                 finally:os.unlink(name)

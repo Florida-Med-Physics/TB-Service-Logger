@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from core import Engine, parse
+from contextlib import closing
 from web_app import LocalServer, Service
 
 class BrowserServiceTests(unittest.TestCase):
@@ -53,7 +54,7 @@ class BrowserServiceTests(unittest.TestCase):
         self.assertEqual({r['kind'] for r in value['records']},{'reports','screenshots'})
         backup=self.request('/api/backup').read();self.assertTrue(backup.startswith(b'SQLite format 3'))
         path=self.root/'backup.sqlite3';path.write_bytes(backup)
-        with sqlite3.connect(path) as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM records').fetchone()[0],2)
+        with closing(sqlite3.connect(path)) as db:self.assertEqual(db.execute('SELECT COUNT(*) FROM records').fetchone()[0],2)
         self.assertTrue(self.request('/api/excel').read().startswith(b'PK'))
         reopened=Engine(self.root/'data');self.assertEqual(len(reopened.rows()),2);reopened.db.close()
     def test_scan_now_imports_a_new_file_while_paused(self):

@@ -136,4 +136,5 @@ class DesktopWorker:
             self.events.put(dict(type='error',message='Startup failed: '+str(exc)))
         finally:
             if self.engine:self.engine.db.close()
+            for handler in self.logger.handlers[:]:handler.close();self.logger.removeHandler(handler)
             self.events.put(dict(type='closed'))

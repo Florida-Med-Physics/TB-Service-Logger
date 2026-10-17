@@ -14,7 +14,11 @@ class NativeTests(unittest.TestCase):
         self.engine=Engine(self.home)
         self.engine.configure({'reports':str(self.reports),'screenshots':str(self.screens),'output':str(self.output)})
     def tearDown(self):
-        self.engine.db.close();self.temp.cleanup()
+        self.engine.db.close()
+        import logging
+        logger=logging.getLogger('truebeam.'+str(self.home))
+        for handler in logger.handlers[:]:handler.close();logger.removeHandler(handler)
+        self.temp.cleanup()
     def test_paths_and_running_survive_restart(self):
         e=Engine(self.home)
         self.assertEqual(e.config['reports'],str(self.reports.resolve()))
