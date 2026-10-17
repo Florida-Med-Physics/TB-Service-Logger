@@ -47,11 +47,19 @@ def recognize(image):
         fd, name=tempfile.mkstemp(suffix='.png'); os.close(fd)
         try:
             image.save(name)
-            helper=Path(__file__).with_name('ocr_macos.swift')
-            result=subprocess.run(['swift',str(helper),name],capture_output=True,text=True,timeout=120)
+            helper=Path(getattr(sys,'_MEIPASS',Path(__file__).parent))/'ocr_macos'
+            command=[str(helper),name] if helper.is_file() else ['swift',str(Path(__file__).with_name('ocr_macos.swift')),name]
+            result=subprocess.run(command,capture_output=True,text=True,timeout=120)
             if result.returncode: raise RuntimeError(result.stderr[-600:])
             return result.stdout
         finally: os.unlink(name)
+    if sys.platform=='win32':
+        import numpy as np
+        from rapidocr_onnxruntime import RapidOCR
+        global _rapid_ocr
+        if '_rapid_ocr' not in globals():_rapid_ocr=RapidOCR()
+        result,_=_rapid_ocr(np.asarray(image))
+        return '\n'.join(item[1] for item in (result or []))
     import pytesseract
     if sys.platform=='win32':
         candidates=[os.environ.get('TESSERACT_CMD',''),str(Path(__file__).parent/'ocr'/'tesseract.exe'),str(Path(os.environ.get('PROGRAMFILES','C:/Program Files'))/'Tesseract-OCR'/'tesseract.exe')]

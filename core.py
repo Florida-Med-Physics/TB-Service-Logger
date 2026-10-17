@@ -152,7 +152,7 @@ class Engine:
         self.db.commit()
         self.dirty = True
 
-    def scan(self):
+    def scan(self, auto_export=True):
         if not self.config.get('running'):
             return
         warnings = []
@@ -203,7 +203,7 @@ class Engine:
                         self.dirty = True
                     except (OSError, sqlite3.Error) as exc:
                         warnings.append(name+': '+str(exc))
-        if self.dirty:
+        if self.dirty and auto_export:
             try:
                 self.export()
                 self.dirty = False

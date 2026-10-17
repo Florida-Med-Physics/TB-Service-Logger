@@ -1,50 +1,27 @@
 # TrueBeam Service Log
 
-## Standalone local HTML — recommended
+## Native desktop application — recommended
 
-Download **[standalone/TrueBeam-Local.html](standalone/TrueBeam-Local.html)** as a file and
-double-click it in Microsoft Edge or Google Chrome.
+Windows executable and Mac application with direct PDF/screenshot import and included offline OCR.
 
-It runs directly from a file URL with no Python, no installed OCR engine, no local server,
-and no internet connection. PDF parsing, screenshot OCR and English language data are embedded.
+Open Folder settings. Choose the service-report and screenshot folders, choose a new Excel filename, and select Save & Monitor. All paths and the monitoring preference persist across relaunches.
 
-Select the service-report and screenshot folders with Browse, grant read access, and start
-monitoring. The app keeps its database in the browser and provides two tabs:
+Imports and saved edits commit immediately to SQLite. The same Excel report is atomically replaced every 10 minutes. Export Report saves immediately. Keep the app running and close the workbook in Excel to permit replacement.
 
-- **Service Reports:** work orders and PMP attachments, service dates, work performed,
-  parts, engineer and hours.
-- **Fault Reports:** error codes, fault descriptions, timestamps, severity, impact and
-  linked original screenshots.
+Service Reports and Fault Reports are separate. Fault Reports has SUGGESTED SOLUTION, OUR SOLUTION, and Initials, with no Status column. Double-click a value to read/edit it, or a filename to open originals. Import details exposes extraction errors and retries.
 
-The default status is **Closure documented**. Dark mode can be turned on or off and is saved.
-Search, edit entries, link confirmed duplicates, export a tab as CSV, and back up or restore
-the complete database as JSON.
+Read DESKTOP START HERE.txt for installation, persistent data locations, and migration details.
 
-Keep the HTML at the same location and use the same browser profile. Monitoring runs while
-the page is open. Save regular JSON backups; browser storage is not the source folder.
-Original files are never modified or uploaded.
+## Build
+Install Python 3.12. Run python -m pip install -r requirements-desktop.txt, then python build_desktop.py on the target OS. Output is in dist/. Run python verify_desktop.py to test packaged OCR, PDF, Excel and native-window launch.
 
-See **[standalone/README.md](standalone/README.md)** for details and limitations.
+The Build Windows application GitHub Actions workflow produces a downloadable Windows ZIP artifact. Source launch: python desktop_app.py, or Launch TrueBeam.command / Launch TrueBeam.bat.
 
-## Optional Python/server version
-
-The older helper-based version is still available for deployments that prefer a local SQLite
-database and an Excel export. It is separate from the standalone HTML and is not needed to
-use it.
-
-Extract the repository and run **Start Local App.bat** on Windows or **Start Local App.command**
-on Mac. Python 3.10+ is required. Windows screenshot OCR additionally requires Tesseract.
-Read **START HERE.txt** for setup and offline installation instructions.
+This Mac build targets Apple silicon; Windows targets x64. Packages require no Python, Tesseract, server, or internet. Apps are unsigned; deployment approval on managed computers remains an institutional decision.
 
 ## Validation
+Run python -m unittest -q test_core.py test_web.py test_desktop.py.
+Tests cover ingestion, persistence, edits, links, report schemas, ten-minute replacement, retries, and preservation of the previous file on save failure. Packaged tests exercise bundled PDF and OCR support. No private PDFs, screenshots, settings, or databases are distributed.
 
-The Python version has 20 tests:
-`python -m unittest -v test_core.py test_web.py`
-
-The standalone HTML was tested from a file URL with networking disabled, including:
-native browser file-system handles, new-file monitoring, persistent database records, edits,
-duplicates, backups, restore, source reconnection, and dark mode.
-The 38 supplied work orders parsed with their key fields, and all eight screenshot examples
-produced the expected primary error codes. Additional 100000 codes were retained where shown.
-
-Windows/browser-policy validation is still required on the target UFHPT computer.
+## Earlier versions
+Standalone HTML and browser-helper versions remain for existing installations. Native apps reuse disk-based SQLite data but do not automatically read browser IndexedDB. Transfer browser-only manual edits before retiring the HTML.

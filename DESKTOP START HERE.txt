@@ -1,0 +1,33 @@
+TRUEBEAM SERVICE LOG — DESKTOP APPLICATION
+
+Windows: Extract the entire TrueBeam Service Log folder. Double-click TrueBeam Service Log.exe. Keep its _internal folder beside the executable.
+Mac: Extract and open TrueBeam Service Log.app. The Mac build supplied here is for Apple silicon. This app is unsigned; institutional software approval may be required.
+
+No Python installation, browser, web server, OCR installation, or network access is needed to run the packaged application. Windows includes its OCR models. Mac uses a bundled Apple Vision helper.
+
+1. Open Folder settings.
+2. Choose the service-report folder and screenshot folder (two separate rows).
+3. Choose a NEW Excel output filename ending in .xlsx. Existing unrelated files are protected.
+4. Select Save & Monitor.
+
+The two source paths, Excel output path, and monitoring preference are stored on disk. They return on relaunch. If a network folder is disconnected, the saved path is retained. Reconnect the drive; do not select a replacement unless you intend to change it.
+
+PDF and PNG imports are processed directly from the filesystem. Newly copied files must be unchanged across two checks (about 5–10 seconds) before import. Large initial batches can take longer. The UI remains responsive during OCR.
+
+Each import and saved edit is committed immediately to the local SQLite database. The SAME Excel output file is atomically replaced every 10 minutes, even when the data has not changed. Export Report saves it immediately. On closing the app, pending edits also get a final save. Keep the app running for monitoring and timed exports; a sleeping or shut-down computer cannot run the timer. Close the report in Excel to release file locks. Failed report saves preserve the previous file and retry every 30 seconds.
+
+Service Reports and Fault Reports are separate tabs. Fault Reports has SUGGESTED SOLUTION, OUR SOLUTION, and Initials; it has no Status column. Double-click a value to read/edit it, then Save. Double-click a source filename for links to every original PDF/PNG. Source files are never modified. Excel is an output, not a bidirectional editor.
+
+Import details lists every source and any extraction error. Retry failed imports retries those records. Windows includes an offline OCR engine. OCR still needs a visible, readable fault tooltip/error panel; unclear screenshots remain listed with a warning so they can be checked manually.
+
+Application files:
+Windows: %LOCALAPPDATA%\.truebeam-service-log
+Mac: ~/.truebeam-service-log
+  settings.json — sticky source/output paths
+  service-log.sqlite3 — disk database and edited fields
+  application.log — diagnostic log (rotated)
+  appearance.json — dark-mode preference
+
+Existing native/Python log data on this Mac is reused automatically. A browser-only HTML database is separate and is not automatically migrated. Source folders can be rescanned; keep the original HTML until any browser-only manual edits have been transferred.
+
+Builds contain code and public OCR dependencies only. No user PDFs, screenshots, or database records are distributed.
