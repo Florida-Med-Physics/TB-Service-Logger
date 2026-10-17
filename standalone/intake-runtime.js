@@ -51,7 +51,7 @@ async function saveTherapistFault(data,files=[]){
  const attachments=[];
  for(const file of files){if(!/\.(png|jpe?g|bmp|webp)$/i.test(file.name))throw new Error('Attach PNG or JPEG screenshots.');attachments.push({name:file.name,file});}
  const fields=Object.fromEntries(LOCAL_FIELDS.map(key=>[key,'']));
- for(const key of ['service_date','fault_code','fault_name','issue','work_performed','worker_initials','notes'])fields[key]=String(data[key]||'').trim();
+ for(const key of ['service_date','fault_code','fault_name','issue','work_performed','worker_initials'])fields[key]=String(data[key]||'').trim();
  fields.worker_initials=fields.worker_initials.toUpperCase().slice(0,12);
  const id=await dbPut('records',{...fields,key:'therapist:'+crypto.randomUUID(),kind:'screenshots',entryType:'manual',document_type:'Therapist entry',digest:'',path:'',signature:'manual',version:1,text:'',error:'',review:'Closure documented',attachments,imported:new Date().toISOString()});
  await refreshLocalRecords();await poll();chooseTab('screenshots');notice('Therapist fault saved. It is included in the fault table and Export Report.');return id;
@@ -92,7 +92,7 @@ async function initIntake(){
  actions.prepend(add,importButton,details,input);
  const {dialog,body}=intakeDialog('therapist-fault','Add therapist fault');
  const form=el('form');form.id='therapist-fault-form';const grid=el('div',undefined,'edit-grid');
- for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea'],['notes','Notes','textarea']]){
+ for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea']]){
   const wrap=el('div',undefined,type==='textarea'?'wide':'');const labelNode=el('label',label);labelNode.htmlFor='therapist-'+key;
   const control=el(type==='textarea'?'textarea':'input');control.id='therapist-'+key;control.name=key;if(type!=='textarea')control.type=type;
   if(['service_date','worker_initials','issue'].includes(key))control.required=true;

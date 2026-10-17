@@ -11,7 +11,7 @@ If the computer restricts folder access, use Import files to choose PDFs and PNG
 PNG decoding snapshots file bytes and falls back to the browser image decoder. Source links use explicit PDF/image MIME types. Import details lists exact extraction errors, opens originals, and retries problem files. Unreadable documents remain available for manual entry. A timeout prevents one blocked extraction from waiting forever. If institutional browser policy blocks OCR/worker execution, Import details reports the problem; the app cannot change that policy.
 
 ## Therapist fault entry
-Add fault opens a form with event date/time, therapist initials, error code and name if known, Error Details, Resolution if fixed, notes, and optional screenshots. Description, initials, and event time are required. The entry is saved immediately to the local database, appears in Fault Reports, remains editable, and is included in CSV and Excel reports. Screenshot attachments are retained in browser storage.
+Add fault opens a form with event date/time, therapist initials, error code and name if known, Error Details, Resolution if fixed and optional screenshots. Description, initials, and event time are required. The entry is saved immediately to the local database, appears in Fault Reports, remains editable, and is included in CSV and Excel reports. Screenshot attachments are retained in browser storage.
 
 Fault Reports has SUGGESTED SOLUTION, Resolution, Worker Initials, and Screenshot links. It has no Status or Machine column. Click plain-text values to edit; click longer descriptions for the full-text pop-up. Empty cells show a hyphen. Tables fit the page width and extend down the page.
 

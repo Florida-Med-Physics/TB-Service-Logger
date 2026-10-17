@@ -190,7 +190,7 @@ function scheduleAction(action,payload,operation){
  return {queued:true,id};
 }
 function csvExport(){
- const fields=LOCAL_FIELDS.filter(k=>k!=='machine'&&(kind!=='screenshots'||!['impact','service_status'].includes(k)));
+ const fields=LOCAL_FIELDS.filter(k=>k!=='machine'&&(kind!=='screenshots'||!['impact','service_status','notes'].includes(k)));
  const headers=['ID',...fields.map(k=>fieldLabel(k)),'Source files','Import problems'],rows=[headers];
  for(const record of displayedRecords())rows.push([record.id,...fields.map(k=>k==='service_status'?(record[k]||record.review||''):(record[k]||'')),record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
  const quote=value=>{let text=String(value??'');if(/^[=+\-@\t\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';};
