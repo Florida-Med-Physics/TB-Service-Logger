@@ -9,7 +9,7 @@ args=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--
       '--icon',str(ROOT/'assets'/('truebeam-icon.icns' if sys.platform=='darwin' else 'truebeam-icon.ico')),
       '--add-data',str(ROOT/'assets')+os.pathsep+'assets','--collect-all','pymupdf','--hidden-import','PIL._tkinter_finder']
 if sys.platform=='darwin':
-    subprocess.run(['swiftc','ocr_macos.swift','-o',str(assets/'ocr_macos')],check=True)
+    subprocess.run(['swiftc','-target',platform.machine()+'-apple-macos13.0','ocr_macos.swift','-o',str(assets/'ocr_macos')],check=True)
     args+=['--add-binary',str(assets/'ocr_macos')+os.pathsep+'.',
            '--exclude-module','rapidocr_onnxruntime','--exclude-module','onnxruntime',
            '--exclude-module','cv2','--exclude-module','numpy']
