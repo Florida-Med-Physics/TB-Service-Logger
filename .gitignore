@@ -11,3 +11,6 @@ build/
 dist/
 build-resources/
 *.spec
+
+dist-html/
+build-html/

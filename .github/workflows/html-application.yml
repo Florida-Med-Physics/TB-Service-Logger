@@ -1,0 +1,31 @@
+name: Build HTML application
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'html_application.py'
+      - 'build_html_application.py'
+      - 'verify_html_application.py'
+      - 'standalone/TrueBeam-Local.html'
+      - '.github/workflows/html-application.yml'
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install "pyinstaller>=6.12,<7"
+      - run: python build_html_application.py
+      - run: python verify_html_application.py
+      - shell: pwsh
+        run: |
+          Copy-Item "HTML APPLICATION START HERE.txt" "dist-html/TrueBeam Service Log/START HERE.txt"
+          Compress-Archive -Path "dist-html/TrueBeam Service Log" -DestinationPath "dist-html/TrueBeam-HTML-Windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TrueBeam-HTML-Windows
+          path: dist-html/TrueBeam-HTML-Windows.zip
+          retention-days: 30

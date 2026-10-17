@@ -1,0 +1,21 @@
+TRUEBEAM SERVICE LOG — HTML APPLICATION
+
+This executable launches the existing HTML interface unchanged.
+It does not show the previous native table layout.
+
+Mac: Extract the ZIP, then open TrueBeam Service Log.app.
+Windows: Extract the whole ZIP. Keep _internal beside TrueBeam Service Log.exe, then double-click the EXE.
+
+Google Chrome or Microsoft Edge must be installed. No Python, Tesseract installation, server, or internet connection is needed. PDF and OCR assets are bundled in the HTML.
+
+The launcher installs the HTML to a stable per-user location and opens it in a supported browser. On Windows it prefers the supported default browser; on Mac it prefers Chrome, then Edge. Keep using the same browser/profile for the existing database and remembered folder connections.
+
+Stable HTML locations:
+Windows: %LOCALAPPDATA%\TrueBeam Service Log\TrueBeam-Local.html
+Mac: ~/Library/Application Support/TrueBeam Service Log/TrueBeam-Local.html
+
+The existing buttons, table layout, branding, dark mode, therapist Add fault form, source links, Resolution field, and Excel connection are unchanged. Reconnect folder/write permissions if the browser asks. Imports and edits are stored in that browser's local database. Export Report saves the connected workbook after changes and re-saves every minute while the page is open.
+
+This package is local-only. It does not expose reports/screenshots on the network and does not add shared co-authoring. The one-minute report replacement still requires Excel to release its write lock; if the workbook is open, the app retains database changes and retries the report save. A shared host with a refresh-only report requires a separate, explicitly authorized network deployment.
+
+Apps are unsigned and may need institutional approval. This Mac build targets Apple silicon. Windows builds target x64.
