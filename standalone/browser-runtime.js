@@ -18,14 +18,17 @@ function groupedEvents(){
  const groups=new Map();
  for(const record of browserStore.records.slice().sort((a,b)=>a.id-b.id)){
   const norm=v=>String(v||'').replace(/\s/g,'').toLowerCase();
-  const key=record.linkTarget?JSON.stringify(['manual',record.kind,record.linkTarget]):record.kind==='screenshots'&&record.fault_code&&record.service_date?JSON.stringify(['fault',...['machine','fault_code','fault_name','service_date','issue'].map(k=>norm(record[k]))]):JSON.stringify(['file',record.kind,record.digest||record.key]);
-  if(!groups.has(key))groups.set(key,{...record,sources:[],possible_duplicate:false});
+  const key=record.linkTarget?JSON.stringify(['manual',record.kind,record.linkTarget]):record.entryType==='manual'?JSON.stringify(['therapist',record.key]):record.kind==='screenshots'&&record.fault_code&&record.service_date?JSON.stringify(['fault',...['machine','fault_code','fault_name','service_date','issue'].map(k=>norm(record[k]))]):JSON.stringify(['file',record.kind,record.digest||record.key]);
+  if(!groups.has(key))groups.set(key,{...record,sources:[],recordIds:[],possible_duplicate:false});
   let group=groups.get(key);
-  if(record.linkTarget===record.id){const sources=group.sources;group={...record,sources,possible_duplicate:false};groups.set(key,group);}
-  group.sources.push({id:record.id,path:record.path,error:record.error||''});
+  if(record.linkTarget===record.id){const sources=group.sources,recordIds=group.recordIds;group={...record,sources,recordIds,possible_duplicate:false};groups.set(key,group);}
+  group.recordIds.push(record.id);
+  if(record.entryType==='manual'){
+   for(const [index,attachment] of (record.attachments||[]).entries())group.sources.push({id:record.id+':a:'+index,path:attachment.name,error:''});
+  }else group.sources.push({id:record.id,path:record.path,error:record.error||''});
  }
  const events=[...groups.values()];
- for(const event of events){delete event.handle;event.possible_duplicate=events.some(other=>other.id!==event.id&&other.kind===event.kind&&event.fault_code&&other.fault_code===event.fault_code&&other.fault_name===event.fault_name&&other.machine===event.machine);}
+ for(const event of events){delete event.handle;delete event.sourceFile;delete event.attachments;event.possible_duplicate=events.some(other=>other.id!==event.id&&other.kind===event.kind&&event.fault_code&&other.fault_code===event.fault_code&&other.fault_name===event.fault_name&&other.machine===event.machine);}
  return events.reverse();
 }
 async function permission(handle,ask=false){
@@ -96,7 +99,7 @@ function imageCanvas(image){const canvas=document.createElement('canvas');canvas
 function cropCanvas(image,x,y,w,h,scale=1){const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));canvas.getContext('2d').drawImage(image,x,y,w,h,0,0,canvas.width,canvas.height);return canvas;}
 async function recognizeCanvas(canvas){const worker=await ocrWorker();return (await worker.recognize(canvas)).data.text.trim();}
 async function screenshotText(file){
- const image=await createImageBitmap(file),canvas=imageCanvas(image),w=canvas.width,h=canvas.height;
+ const canvas=await readImageCanvas(file),w=canvas.width,h=canvas.height;
  const top=Math.floor(h*.45),cw=Math.floor(w*.51),ch=Math.floor(h*.45),pixels=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,top,cw,ch).data;
  const colors=new Map();for(let i=0;i<pixels.length;i+=4){const r=pixels[i],g=pixels[i+1],b=pixels[i+2];if(r>235&&g>235&&b>170&&b<235){const key=(r<<16)|(g<<8)|b;colors.set(key,(colors.get(key)||0)+1);}}
  let chosen=0,count=0;for(const [key,value] of colors)if(value>count){chosen=key;count=value;}
@@ -111,7 +114,6 @@ async function screenshotText(file){
  if(!panel&&!/CTRL_|CAUSE\s*:|ID\s*:/i.test(detail))detail='';
  const list=await recognizeCanvas(cropCanvas(canvas,0,h*.615,w*.123,h*.07,3)),codes=[];
  for(const line of list.split('\n')){const match=line.match(/^[\s|©®○•()]*[oO]?\s*([0-9OoIlisSzZB|][0-9OoIlisSzZB| \t-]{2,15}[0-9OoIlisSzZB|])(?:\s+[A-Z]{2,5}|\s*$)/);if(match){const code=normalizedCode(match[1]);if(code&&!codes.includes(code))codes.push(code);}}
- image.close();
  if(!detail&&!codes.length)throw new Error('No fault tooltip, application error, or readable fault list detected. Review this source manually.');
  return detail+(codes.length?'\nAdditional fault codes: '+codes.join(', '):'');
 }
@@ -151,7 +153,7 @@ async function extractLocalFile(file,kind){
  if(/\.docx$/i.test(file.name))return extractDocx(file);
  if(/\.txt$/i.test(file.name))return file.text();
  if(kind==='screenshots')return screenshotText(file);
- const bitmap=await createImageBitmap(file),canvas=imageCanvas(bitmap);bitmap.close();return recognizeCanvas(canvas);
+ const canvas=await readImageCanvas(file);return recognizeCanvas(canvas);
 }
 async function scanFolders(){
  if(browserStore.busy)return;
@@ -170,7 +172,7 @@ async function scanFolders(){
     if(old&&old.signature===signature&&old.version===1){if(!old.handle){await dbPut('records',{...old,handle:source.handle});await refreshLocalRecords();}continue;}
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(v=>v.toString(16).padStart(2,'0')).join('');
     if(old&&old.digest===digest&&old.version===1){await dbPut('records',{...old,signature,handle:source.handle});await refreshLocalRecords();continue;}
-    let text='',error='';try{text=(await extractLocalFile(file,kind)).trim();if(!text)throw new Error('No readable text found.');}catch(e){error=e.message||String(e);}
+    let text='',error='';try{text=(await extractWithDeadline(file,kind)).trim();if(!text)throw new Error('No readable text found.');}catch(e){error=e.message||String(e);}
     let fields=parseLocalText(text);
     if(old){const previous=parseLocalText(old.text||'');for(const field of LOCAL_FIELDS)if(old[field]&&(old.review==='Reviewed'||old[field]!==previous[field]))fields[field]=old[field];}
     const record={...fields,key,path:directory.name+'/'+source.path,kind,digest,signature,version:1,handle:source.handle,text,error,review:'Closure documented',imported:new Date().toISOString()};
@@ -180,7 +182,7 @@ async function scanFolders(){
    }catch(e){warnings.push(source.path+': '+(e.message||e));}
   }}catch(e){warnings.push(directory.name+': '+(e.message||e));}
  }}
- finally{browserStore.busy=false;browserStore.last_scan=new Date().toLocaleString();browserStore.message=warnings.join(' ')||(browserStore.stopRequested?'Monitoring paused.':'Folders checked. Entries are saved in this browser.');}
+ finally{browserStore.busy=false;browserStore.last_scan=new Date().toLocaleString();browserStore.message=warnings.join(' ')||(browserStore.records.some(r=>r.error)?'Some files need attention. Open Import details for the exact errors.':browserStore.stopRequested?'Monitoring paused.':'Folders checked. Entries are saved in this browser.');}
 }
 function scheduleAction(action,payload,operation){
  const id=crypto.randomUUID();
@@ -207,11 +209,18 @@ async function localApi(route,body){
   return new Response(JSON.stringify({path:handle.name}));
  }
  if(route.startsWith('source?id=')){
-  const id=Number(route.split('=')[1]),record=await dbGet('records',id);
-  if(!record?.handle)throw new Error('Reconnect the source folder and scan it to reopen this source.');
-  if(!await permission(record.handle,true))throw new Error('Read access was not granted.');
-  const file=await record.handle.getFile();return new Response(file,{headers:{'Content-Type':file.type||(/\.pdf$/i.test(file.name)?'application/pdf':'application/octet-stream')}});
+  const parts=route.split('=')[1].split(':'),record=await dbGet('records',Number(parts[0]));
+  if(!record)throw new Error('Source entry no longer exists.');
+  if(parts[1]==='a'){
+   const attachment=record.attachments?.[Number(parts[2])];if(!attachment?.file)throw new Error('Attachment is unavailable.');
+   return sourceResponse(attachment.file,attachment.name);
+  }
+  if(record.sourceFile)return sourceResponse(record.sourceFile,record.path);
+  if(!record.handle)throw new Error('Reconnect the source folder in Folder settings and scan, or use Import files to select the original again.');
+  if(!await permission(record.handle,true))throw new Error('Read access was not granted. Reconnect the source folder in Folder settings.');
+  try{return sourceResponse(await record.handle.getFile(),record.path);}catch(e){throw new Error('Cannot read this original file. Check that the network drive is connected and the file is downloaded locally. '+e.message);}
  }
+
  if(route==='backup'){
   const records=browserStore.records.map(({handle,...record})=>record);
   return new Response(JSON.stringify({format:'truebeam-browser-backup',version:1,created:new Date().toISOString(),records},null,2),{headers:{'Content-Type':'application/json'}});
@@ -221,7 +230,7 @@ async function localApi(route,body){
   for(const key of ['reports','screenshots'])if(!await permission(browserStore.handles[key],true))throw new Error('Use Browse to grant read access to the '+key+' folder.');
   browserStore.config.running=true;browserStore.stopRequested=false;browserStore.seen.clear();browserStore.message='Monitoring selected folders every five seconds while this page remains open.';
   if(!browserStore.timer)browserStore.timer=setInterval(()=>{if(browserStore.config.running)scanFolders().catch(e=>browserStore.message=e.message);},5000);
-  return new Response(JSON.stringify(scheduleAction(route,body,async()=>{await scanFolders();})));
+  return new Response(JSON.stringify(scheduleAction(route,body,async()=>{await scanFolders();await new Promise(resolve=>setTimeout(resolve,2200));await scanFolders();})));
  }
  if(route==='pause'){browserStore.config.running=false;browserStore.stopRequested=true;browserStore.message='Monitoring paused. Existing entries remain saved.';return new Response(JSON.stringify(scheduleAction(route,body,async()=>{})));}
  if(route==='scan'||route==='retry'){
@@ -238,12 +247,12 @@ async function localApi(route,body){
   if(![...LOCAL_FIELDS,'review'].includes(body.field))throw new Error('Unknown field.');
   if(body.field==='review'&&!['Reviewed','Closure documented'].includes(body.value))throw new Error('Invalid status.');
   const event=groupedEvents().find(r=>r.id===Number(body.id));if(!event)throw new Error('Entry no longer exists.');
-  const changed=await Promise.all(event.sources.map(async source=>{const old=await dbGet('records',source.id);if(!old)throw new Error('Source no longer exists.');return {...old,[body.field]:String(body.value)};}));
+  const changed=await Promise.all((event.recordIds||event.sources.map(s=>s.id)).map(async id=>{const old=await dbGet('records',id);if(!old)throw new Error('Source no longer exists.');return {...old,[body.field]:String(body.value)};}));
   await new Promise((resolve,reject)=>{const tx=browserStore.db.transaction('records','readwrite');for(const record of changed)tx.objectStore('records').put(record);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
   await refreshLocalRecords();return new Response(JSON.stringify({ok:true}));
  }
  if(route==='update')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const old=await dbGet('records',Number(body.id));if(!old)throw new Error('Unknown record.');const record={...old};for(const key of [...LOCAL_FIELDS,'review'])if(Object.hasOwn(body,key))record[key]=String(body[key]);if(!['Reviewed','Closure documented'].includes(record.review))throw new Error('Invalid review status.');await dbPut('records',record);await refreshLocalRecords();})));
- if(route==='merge')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const events=groupedEvents(),source=events.find(r=>r.id===Number(body.source)),target=events.find(r=>r.id===Number(body.target));if(!source||!target||source.id===target.id||source.kind!==target.kind)throw new Error('Choose two entries on the same tab.');for(const item of [...source.sources,...target.sources]){const record=await dbGet('records',item.id);record.linkTarget=target.id;await dbPut('records',record);}await refreshLocalRecords();})));
+ if(route==='merge')return new Response(JSON.stringify(scheduleAction(route,body,async()=>{const events=groupedEvents(),source=events.find(r=>r.id===Number(body.source)),target=events.find(r=>r.id===Number(body.target));if(!source||!target||source.id===target.id||source.kind!==target.kind)throw new Error('Choose two entries on the same tab.');for(const id of [...source.recordIds,...target.recordIds]){const record=await dbGet('records',id);record.linkTarget=target.id;await dbPut('records',record);}await refreshLocalRecords();})));
  throw new Error('Unknown local action.');
 }
 async function initStandalone(){
@@ -252,9 +261,9 @@ async function initStandalone(){
   $('reports').readOnly=true;$('screenshots').readOnly=true;
   $('reports').placeholder='Choose the service-report folder…';$('screenshots').placeholder='Choose the screenshot folder…';
   $('excel').textContent='Export Report';
-  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves hourly.';
+  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every 10 minutes.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
-  await poll();await initExcelSync();setInterval(poll,2000);
+  await poll();await initIntake();await initExcelSync();setInterval(poll,2000);
  }catch(e){notice('Browser database unavailable: '+(e.message||e)+'. Open the file in a regular Edge or Chrome window with browser storage enabled.',true);}
 }
 async function restoreStandalone(file){

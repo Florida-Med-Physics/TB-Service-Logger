@@ -236,7 +236,7 @@ for(const record of visible){
  else for(const field of fields){if(fields.length>1&&!String(record[field]||'').trim()&&fields.some(key=>String(record[key]||'').trim()))continue;container.append(inlineField(record,field));if(fields.every(key=>!String(record[key]||'').trim()))break;}if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
  const sources=el('div',undefined,'source-links');
  for(const source of record.sources){const name=source.path.split(/[\\/]/).pop();const link=el('a',name);link.href='#';link.title='Open '+name;link.onclick=event=>{event.preventDefault();openSource(source.id);};sources.append(link);}
- cell(tr,sources);[...tr.children].forEach((td,i)=>td.dataset.label=headers[i]);$('rows').append(tr);
+ if(!record.sources.length)sources.append(el('span','-'));cell(tr,sources);[...tr.children].forEach((td,i)=>td.dataset.label=headers[i]);$('rows').append(tr);
 }
 
 $('results').textContent=visible.length+' of '+all.filter(r=>r.kind===kind).length+' entries';$('empty').hidden=visible.length>0;$('empty').querySelector('h3').textContent=query||filter?'No matching entries':kind==='reports'?'No service reports yet':'No fault reports yet';

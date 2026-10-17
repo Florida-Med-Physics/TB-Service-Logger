@@ -13,11 +13,11 @@ assets={
 }
 embedded={name:base64.b64encode(path.read_bytes()).decode('ascii') for name,path in assets.items()}
 api=(modules/'tesseract.js/dist/tesseract.min.js').read_text()
-runtime=(root/'standalone/browser-runtime.js').read_text()+'\n'+(root/'standalone/excel-runtime.js').read_text()
+runtime=(root/'standalone/browser-runtime.js').read_text()+'\n'+(root/'standalone/excel-runtime.js').read_text()+'\n'+(root/'standalone/intake-runtime.js').read_text()
 page=(root/'index.html').read_text()
 page=page.replace('Local database · files stay on this computer','Local HTML · offline')
 page=page.replace('Select folders on this computer or a mapped network drive. Existing files are included.','Use Edge or Chrome to choose two folders. This HTML runs offline; no launcher or server is needed.')
-page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. The connected Export Report is saved after changes and re-saved hourly while this page is open.')
+page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. The connected Export Report is saved after changes and re-saved every 10 minutes while this page is open.')
 start=page.index('async function api(path,body){')
 end=page.index('\nasync function command(',start)
 page=page[:start]+'async function api(path,body){return localApi(path,body);}'+page[end:]

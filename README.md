@@ -1,6 +1,6 @@
 # TrueBeam Service Log
 
-## Native desktop application — recommended
+## Local HTML — current interface\n\nOpen standalone/TrueBeam-Local.html in desktop Chrome or Edge. The HTML interface includes folder monitoring, Import files as a standard-file fallback, Import details for diagnostics, and Add fault for therapist entries with optional screenshots. See standalone/README.md. The same Excel output re-saves every 10 minutes while the page is open.\n\n## Native desktop application — alternate
 
 Windows executable and Mac application with direct PDF/screenshot import and included offline OCR.
 

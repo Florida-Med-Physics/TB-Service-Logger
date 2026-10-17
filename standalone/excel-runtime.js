@@ -35,7 +35,7 @@ function excelWorkbook(records){
 function excelStatus(message,error=false){const node=$('excel-status');if(node){node.textContent=message;node.style.color=error?'#b23b31':'';}}
 async function syncExcel(force=false){
  if(!excelSync.handle||excelSync.busy||(!force&&Date.now()<excelSync.retryAt))return;
- const records=groupedEvents(),signature=JSON.stringify(records);if(!force&&signature===excelSync.signature&&Date.now()-excelSync.lastSaved<3600000)return;
+ const records=groupedEvents(),signature=JSON.stringify(records);if(!force&&signature===excelSync.signature&&Date.now()-excelSync.lastSaved<600000)return;
  excelSync.busy=true;
  try{
   if(await excelSync.handle.queryPermission({mode:'readwrite'})!=='granted')throw new Error('Reconnect Excel file to grant write access.');
@@ -55,7 +55,7 @@ async function connectExcel(){
 }
 async function initExcelSync(){
  $('excel').onclick=async()=>{if(excelSync.handle){await syncExcel(true);}else{await connectExcel();}};
- const button=el('button','Choose Export Report');button.id='connect-excel';button.onclick=connectExcel;$('folder-dialog').querySelector('.dialog-body').append(button,el('p','Choose a dedicated output workbook. Its contents are replaced with both complete database tables after imports and edits, and re-saved every hour. Keep this page open; close the workbook in Excel to allow saving.','sub'));
+ const button=el('button','Choose Export Report');button.id='connect-excel';button.onclick=connectExcel;$('folder-dialog').querySelector('.dialog-body').append(button,el('p','Choose a dedicated output workbook. Its contents are replaced with both complete database tables after imports and edits, and re-saved every 10 minutes. Keep this page open; close the workbook in Excel to allow saving.','sub'));
  const status=el('span','Export Report not connected · choose an output file in Folder settings');status.id='excel-status';status.setAttribute('role','status');document.querySelector('.monitor-bar').append(status);
  excelSync.handle=await dbGet('settings','excel-output');
  if(excelSync.handle){button.textContent='Change Export Report';excelStatus('Export Report remembered · '+excelSync.handle.name);const reconnect=el('button','Reconnect Export Report');reconnect.onclick=async()=>{try{await excelSync.handle.requestPermission({mode:'readwrite'});excelSync.retryAt=0;await syncExcel(true);}catch(e){excelStatus(e.message,true);}};button.after(reconnect);await syncExcel();}
