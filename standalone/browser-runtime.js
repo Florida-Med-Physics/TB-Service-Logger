@@ -191,8 +191,8 @@ function scheduleAction(action,payload,operation){
 }
 function csvExport(){
  const fields=LOCAL_FIELDS.filter(k=>k!=='machine'&&(kind!=='screenshots'||!['impact','service_status'].includes(k)));
- const headers=['ID',...fields.map(k=>fieldLabel(k)),...(kind==='reports'?['Status']:[]),'Source files','Import problems'],rows=[headers];
- for(const record of displayedRecords())rows.push([record.id,...fields.map(k=>record[k]||''),...(kind==='reports'?[record.review]:[]),record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
+ const headers=['ID',...fields.map(k=>fieldLabel(k)),'Source files','Import problems'],rows=[headers];
+ for(const record of displayedRecords())rows.push([record.id,...fields.map(k=>k==='service_status'?(record[k]||record.review||''):(record[k]||'')),record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
  const quote=value=>{let text=String(value??'');if(/^[=+\-@\t\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';};
  return '\ufeff'+rows.map(row=>row.map(quote).join(',')).join('\r\n');
 }

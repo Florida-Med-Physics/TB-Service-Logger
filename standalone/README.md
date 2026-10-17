@@ -22,3 +22,5 @@ In Folder settings, choose Export Report and select a dedicated .xlsx output fil
 Use the same HTML location and browser profile to retain browser data and remembered paths. Browser storage can be cleared by browser settings or organizational policy. Source folders and user documents are never uploaded or modified.
 
 Tested from a local file URL with networking disabled: eight screenshot examples and their error codes, actual PDF import, direct-file import and source reopening, corrupt-PDF diagnostics, fallback image decoding, therapist entries with/without screenshots, persistence, edits, duplicate grouping, exports, and layout.
+
+Service Reports shows a single status value, separate Engineer and Hours columns, and tighter column padding. CSV reports also omit the duplicate status field. All existing saved values are retained.

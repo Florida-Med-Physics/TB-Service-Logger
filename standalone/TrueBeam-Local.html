@@ -72,6 +72,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .compact-value{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;display:block;width:100%}#compact-detail{max-width:650px}#compact-detail-body{display:grid;gap:16px}#compact-detail .inline-label{font-size:12px}#compact-detail .inline-field{border:1px solid var(--line);padding:9px}
 
 .table-wrap{max-height:none;overflow:visible}.data{overflow:visible}thead{position:sticky;top:0;z-index:2}
+
+th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-value.badge{padding:2px 4px}.source-links{gap:5px}
+@media(max-width:760px){colgroup{display:none}td{padding:7px 4px}}
 </style>
 </head>
 <body>
@@ -901,8 +904,8 @@ function scheduleAction(action,payload,operation){
 }
 function csvExport(){
  const fields=LOCAL_FIELDS.filter(k=>k!=='machine'&&(kind!=='screenshots'||!['impact','service_status'].includes(k)));
- const headers=['ID',...fields.map(k=>fieldLabel(k)),...(kind==='reports'?['Status']:[]),'Source files','Import problems'],rows=[headers];
- for(const record of displayedRecords())rows.push([record.id,...fields.map(k=>record[k]||''),...(kind==='reports'?[record.review]:[]),record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
+ const headers=['ID',...fields.map(k=>fieldLabel(k)),'Source files','Import problems'],rows=[headers];
+ for(const record of displayedRecords())rows.push([record.id,...fields.map(k=>k==='service_status'?(record[k]||record.review||''):(record[k]||'')),record.sources.map(s=>s.path).join('\n'),record.sources.map(s=>s.error).filter(Boolean).join('\n')]);
  const quote=value=>{let text=String(value??'');if(/^[=+\-@\t\r]/.test(text))text="'"+text;return '"'+text.replace(/"/g,'""')+'"';};
  return '\ufeff'+rows.map(row=>row.map(quote).join(',')).join('\r\n');
 }
@@ -1188,7 +1191,7 @@ function sourceErrors(row){return row.sources.map(s=>s.error).filter(Boolean);}
 function cell(row,text,cls){const td=el('td',undefined,cls);if(text instanceof Node)td.append(text);else td.textContent=text||'—';row.append(td);return td;}
 
 const SORT_OPTIONS={
- reports:[['service_date','Start date','date'],['machine_release','Release date','date'],['work_order','Work order'],['case_number','Case number'],['category','Category'],['issue','Subject'],['work_performed','Summary of work'],['parts_installed','Parts installed'],['fault_code','Error code'],['engineer','Engineer'],['work_hours','Work hours','number'],['downtime_hours','Downtime hours','number'],['review','Status'],['sources','Source count','number']],
+ reports:[['service_date','Start date','date'],['machine_release','Release date','date'],['work_order','Work order'],['case_number','Case number'],['category','Category'],['issue','Subject'],['work_performed','Summary of work'],['parts_installed','Parts installed'],['fault_code','Error code'],['engineer','Engineer'],['work_hours','Work hours','number'],['downtime_hours','Downtime hours','number'],['service_status','Status'],['sources','Source count','number']],
  screenshots:[['service_date','Event date','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','SUGGESTED SOLUTION'],['work_performed','Resolution'],['worker_initials','Worker Initials'],['sources','Source count','number']]
 };
 let tableSort={reports:{key:'service_date',direction:'desc'},screenshots:{key:'service_date',direction:'desc'}};
@@ -1197,7 +1200,7 @@ function parsedDate(value){if(!String(value||'').trim())return null;const n=Date
 function displayedRecords(){
  const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').value;
  const {key,direction}=tableSort[kind],type=SORT_OPTIONS[kind].find(o=>o[0]===key)?.[2];
- const value=r=>{const v=key==='sources'?r.sources.length:r[key];if(v===null||v===undefined||String(v).trim()==='')return null;if(type==='date')return parsedDate(v);if(type==='number')return Number.isFinite(Number(v))?Number(v):null;return String(v);};
+ const value=r=>{const v=key==='sources'?r.sources.length:key==='service_status'?(r.service_status||r.review):r[key];if(v===null||v===undefined||String(v).trim()==='')return null;if(type==='date')return parsedDate(v);if(type==='number')return Number.isFinite(Number(v))?Number(v):null;return String(v);};
  return (state?.records||[]).filter(r=>r.kind===kind).filter(r=>!query||JSON.stringify(r).toLowerCase().includes(query)).filter(r=>!filter||(filter==='errors'?sourceErrors(r).length:filter==='duplicates'?r.possible_duplicate||r.sources.length>1:r.review===filter)).sort((a,b)=>{const x=value(a),y=value(b);if(x===null)return y===null?0:1;if(y===null)return -1;const result=typeof x==='number'?x-y:x.localeCompare(y,undefined,{numeric:true,sensitivity:'base'});return direction==='asc'?result:-result;});
 }
 function changeSort(key,direction){const option=SORT_OPTIONS[kind].find(o=>o[0]===key);tableSort[kind]={key,direction:direction||(option?.[2]==='date'?'desc':'asc')};try{localStorage.setItem('truebeam-table-sort',JSON.stringify(tableSort));}catch{}render();}
@@ -1211,7 +1214,7 @@ function syncSortControls(){
 function fieldLabel(key,tab=kind){return tab==='screenshots'?({issue:'Error Details',suggestions:'SUGGESTED SOLUTION',work_performed:'Resolution',worker_initials:'Worker Initials'}[key]||labels[key]):labels[key];}
 function downloadDisplayedTable(){
  const keys=kind==='reports'?['service_date','machine_release','work_order','case_number','category','fault_code','additional_codes','issue','work_performed','parts_installed','engineer','work_hours','downtime_hours','service_status','notes']:['service_date','fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','notes'];
- const records=displayedRecords(),rows=[['Entry ID',...keys.map(k=>fieldLabel(k)),...(kind==='reports'?['Status']:[]),'Source count','Source files','Import problems'],...records.map(r=>[r.id,...keys.map(k=>r[k]??''),...(kind==='reports'?[r.review]:[]),r.sources.length,r.sources.map(s=>s.path).join('\n'),sourceErrors(r).join('\n')])];
+ const records=displayedRecords(),rows=[['Entry ID',...keys.map(k=>fieldLabel(k)),'Source count','Source files','Import problems'],...records.map(r=>[r.id,...keys.map(k=>k==='service_status'?(r[k]||r.review||''):(r[k]??'')),r.sources.length,r.sources.map(s=>s.path).join('\n'),sourceErrors(r).join('\n')])];
  const quote=v=>{let t=String(v??'');if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"';};
  const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
  const a=el('a');a.href=url;a.download=kind==='reports'?'TrueBeam-Service-Reports.csv':'TrueBeam-Fault-Reports.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
@@ -1227,10 +1230,10 @@ function inlineField(record,field,expanded=false){
   };return button;
  }
  if(!expanded){
-  const secondary=['machine_release','case_number','additional_codes','severity','work_hours','downtime_hours','service_status'].includes(field);
+  const secondary=['machine_release','case_number','additional_codes','severity','work_hours','downtime_hours'].includes(field);
   const prefix={machine_release:'Release: ',case_number:'Case ',additional_codes:'Other: ',work_hours:'Work hrs: ',downtime_hours:'Downtime hrs: '}[field]||'';
   const text=record[field]?prefix+record[field]:'-';
-  const button=el('button',text,'editable-value'+(secondary?' secondary':'')+(['fault_code','additional_codes'].includes(field)?' code':'')+(field==='review'?' badge':''));
+  const button=el('button',text,'editable-value'+(secondary?' secondary':'')+(['fault_code','additional_codes'].includes(field)?' code':'')+(['review','service_status'].includes(field)?' badge':''));
   button.type='button';button.title='Edit '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Edit '+fieldLabel(field,record.kind)+' for entry '+record.id);
   button.onclick=()=>{
    const editor=inlineField(record,field,true),input=editor.querySelector('.inline-field');
@@ -1261,7 +1264,7 @@ function compactFields(record,fields){
  const filled=fields.filter(field=>String(record[field]||'').trim());
  const text=filled.map(field=>field==='work_hours'?record[field]+' hrs':field==='downtime_hours'?record[field]+' downtime hrs':record[field]).join(' · ')||'-';
  const button=el('button',text,'editable-value compact-value'+(fields.includes('fault_code')?' code':''));
- button.type='button';button.setAttribute('aria-label','Edit '+(fields.includes('engineer')?'engineer and hours':'error codes')+' for entry '+record.id);
+ button.type='button';button.setAttribute('aria-label','Edit '+(fields.includes('fault_code')?'error codes':'hours')+' for entry '+record.id);
  button.onclick=()=>{let dialog=$('compact-detail');if(!dialog){dialog=el('dialog');dialog.id='compact-detail';const head=el('div',undefined,'dialog-head');head.append(el('h2','Edit fields'));const close=el('button','Done');close.onclick=()=>dialog.close();head.append(close);const body=el('div',undefined,'dialog-body');body.id='compact-detail-body';dialog.append(head,body);document.body.append(dialog);}
  $('compact-detail-body').replaceChildren(...fields.map(field=>inlineField(record,field,true)));dialog.showModal();};
  return button;
@@ -1270,15 +1273,19 @@ function render(){if(!state||document.activeElement?.classList.contains("inline-
 $('stat-reports').textContent=reports.length;$('stat-faults').textContent=faults.length;$('stat-review').textContent=all.filter(r=>r.review!=='Reviewed').length;$('stat-sources').textContent=all.reduce((n,r)=>n+r.sources.length,0);$('count-reports').textContent=reports.length;$('count-faults').textContent=faults.length;
 const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').value;
 let visible=displayedRecords();syncSortControls();
-const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer / hours','Status','Service report']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Screenshot'];
-$('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','work_performed','parts_installed','engineer','review','sources']:['service_date','fault_code','fault_name','issue','suggestions','work_performed','worker_initials','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
+ const table=$('head').closest('table');table.dataset.kind=kind;
+ let cols=table.querySelector('colgroup');if(!cols){cols=el('colgroup');table.prepend(cols);}
+ const widths=kind==='reports'?[11,11,8,14,16,10,9,5,8,8]:[10,9,13,18,18,15,6,11];
+ cols.replaceChildren(...widths.map(width=>{const col=el('col');col.style.width=width+'%';return col;}));
+const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject / error codes','Summary of work','Parts installed','Engineer','Hours','Status','Service report']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Screenshot'];
+$('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','work_performed','parts_installed','engineer','work_hours','service_status','sources']:['service_date','fault_code','fault_name','issue','suggestions','work_performed','worker_initials','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
 
 for(const record of visible){
  const tr=el('tr');tr.dataset.recordId=record.id;
- const groups=kind==='reports'?[['service_date','machine_release'],['work_order','case_number'],['category'],['issue','fault_code','additional_codes'],['work_performed'],['parts_installed'],['engineer','work_hours','downtime_hours'],['review','service_status']]:[['service_date'],['fault_code','additional_codes'],['fault_name','severity'],['issue'],['suggestions'],['work_performed'],['worker_initials']];
- for(const fields of groups){const container=el('div',undefined,'inline-group');if(fields.includes('engineer'))container.append(compactFields(record,fields));
+ const groups=kind==='reports'?[['service_date','machine_release'],['work_order','case_number'],['category'],['issue','fault_code','additional_codes'],['work_performed'],['parts_installed'],['engineer'],['work_hours','downtime_hours'],['service_status']]:[['service_date'],['fault_code','additional_codes'],['fault_name','severity'],['issue'],['suggestions'],['work_performed'],['worker_initials']];
+ for(const fields of groups){const container=el('div',undefined,'inline-group');if(fields.includes('work_hours'))container.append(compactFields(record,fields));
  else if(fields.includes('fault_code')){if(fields.includes('issue'))container.append(inlineField(record,'issue'));container.append(compactFields(record,['fault_code','additional_codes']));}
- else for(const field of fields){if(fields.length>1&&!String(record[field]||'').trim()&&fields.some(key=>String(record[key]||'').trim()))continue;container.append(inlineField(record,field));if(fields.every(key=>!String(record[key]||'').trim()))break;}if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
+ else for(const field of fields){if(fields.length>1&&!String(record[field]||'').trim()&&fields.some(key=>String(record[key]||'').trim()))continue;container.append(inlineField(field==='service_status'?{...record,service_status:record.service_status||record.review||''}:record,field));if(fields.every(key=>!String(record[key]||'').trim()))break;}if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
  const sources=el('div',undefined,'source-links');
  for(const source of record.sources){const name=source.path.split(/[\\/]/).pop();const link=el('a',name);link.href='#';link.title='Open '+name;link.onclick=event=>{event.preventDefault();openSource(source.id);};sources.append(link);}
  if(!record.sources.length)sources.append(el('span','-'));cell(tr,sources);[...tr.children].forEach((td,i)=>td.dataset.label=headers[i]);$('rows').append(tr);
