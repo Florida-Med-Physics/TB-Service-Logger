@@ -4,7 +4,7 @@ from unittest.mock import patch
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
 from PySide6.QtCore import QTimer,QSettings,Qt
 from PySide6.QtWidgets import QApplication,QDialog,QDialogButtonBox,QLineEdit,QPlainTextEdit
-from native_application import Backend,Api,Window,FAULT_COLUMNS,REPORT_COLUMNS,cell_value
+from native_application import Backend,Api,Window,FAULT_COLUMNS,REPORT_COLUMNS,cell_value,display_path
 from live_report import create_live_workbook
 
 APP=QApplication.instance() or QApplication([])
@@ -53,7 +53,7 @@ class NativeTests(unittest.TestCase):
         self.assertNotIn('notes',[c[0] for c in FAULT_COLUMNS])
     def test_pdf_png_import_and_native_source_open(self):
         import pymupdf
-        doc=pymupdf.open();page=doc.new_page();page.insert_text((72,72),'Error code: 420219');data=doc.tobytes();doc.close()
+        doc=pymupdf.open();page=doc.new_page();page.insert_text((72,72),'Work Order Information\nWork Order WO-004557496\nSubject MLC fault\nClosure Summary Verified MLC\nWork Order Times');data=doc.tobytes();doc.close()
         result=self.api.request('upload',{'name':'synthetic-report.pdf','data':base64.b64encode(data).decode()});self.assertFalse(result['error'])
         png=(Path(__file__).parent/'assets'/'truebeam-icon.png').read_bytes()
         result=self.add(attachments=[{'name':'test.png','data':base64.b64encode(png).decode()}])
@@ -76,6 +76,22 @@ class NativeTests(unittest.TestCase):
         with patch('native_application.QFileDialog.getSaveFileName',return_value=(str(path),'CSV')):self.window.download_table('screenshots')
         with path.open(encoding='utf-8-sig') as stream:rows=list(csv.reader(stream))
         self.assertIn('Resolution',rows[0]);self.assertNotIn('Status',rows[0]);self.assertEqual(len(rows),2)
+    def test_fault_event_cell_contains_only_date_and_time(self):
+        record={'kind':'screenshots','service_date':'29-Sep-2026 02:36:30 PM\nAdditional fault codes: 136011','machine_release':'unrelated text'}
+        self.assertEqual(cell_value(record,'service_date'),'09/29/2026\n02:36:30 PM')
+        self.assertEqual(cell_value(dict(record,service_date='24-Sep-202611:23:38 AM'),'service_date'),'09/24/2026\n11:23:38 AM')
+    def test_windows_folder_display_uses_backslashes(self):
+        self.assertEqual(display_path('U:/QA/SystemQA/LINAC QA/TrueBeam/Service reports'),r'U:\QA\SystemQA\LINAC QA\TrueBeam\Service reports')
+        self.assertEqual(display_path(r'W:\Varian\Transfer\TDS\H192905\PrintScreen'),r'W:\Varian\Transfer\TDS\H192905\PrintScreen')
+        self.assertEqual(display_path('/Volumes/QA/TrueBeam'),'/Volumes/QA/TrueBeam')
+    def test_export_to_live_report_path_preserves_existing_workbook(self):
+        self.add(fault_code='420219');self.refresh()
+        configured=self.root/'Report.xlsx'
+        wait_for(lambda:configured.exists())
+        before=configured.read_bytes()
+        with patch('native_application.QFileDialog.getSaveFileName',return_value=(str(configured),'Excel')):
+            self.window.export_report();wait_for(lambda:not self.window.pending)
+        self.assertEqual(configured.read_bytes(),before)
     def test_export_snapshot_has_no_external_feed_dependency(self):
         self.add(fault_code='420219');records=self.api.request('state')['records']
         output=self.root/'Snapshot.xlsx';create_live_workbook(records,output,[],live=False)

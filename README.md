@@ -6,6 +6,8 @@ The app opens directly in its own desktop window with the UF Proton icon. Its in
 
 - Windows: extract **TrueBeam-Service-Log-Windows-x64.zip**, then run **TrueBeam Service Log.exe** — this is one self-contained executable, packaged the same way as EMBRACE.
 - Mac (Apple Silicon): extract **TrueBeam-Service-Log-macOS-arm64.zip**, then open **TrueBeam Service Log.app**.
+- Screenshot event times come from their filenames. Images without an identifiable fault and unrelated PDFs are omitted from report tables; skipped files remain in Import details.
+- Existing Excel report paths can be reused after saving settings or restarting; an open workbook is preserved while its data feeds update.
 - Service Reports and Fault Reports are separate tabs. Double-click values to view/edit, and attached PDFs/PNGs to open in the default viewer.
 - Shared UFHPTI paths are preset. The first Windows instance hosts the shared log; keep it running for other staff. Without a shared drive, the app opens a local workspace.
 - The app saves edits immediately. Background Excel feeds publish every minute without replacing an open workbook. **Export Report** writes a fresh standalone snapshot.

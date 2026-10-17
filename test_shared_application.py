@@ -1,4 +1,5 @@
 import csv,json,os,sqlite3,tempfile,threading,unittest
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.request import Request,urlopen
@@ -44,6 +45,55 @@ class SharedTests(unittest.TestCase):
   self.assertEqual(output.stat().st_mtime_ns,stamp)
   feed=output.parent/(output.stem+'_data')/'FaultReports.csv'
   self.assertIn('New fix',feed.read_text(encoding='utf-8-sig'))
+ def test_reuse_existing_report_after_restart_and_different_saved_path(self):
+  self.fault();self.service.tick();output=Path(self.defaults['output'])
+  before=output.read_bytes();stamp=output.stat().st_mtime_ns
+  # A different profile/previous setting must not reject the existing shared report.
+  self.service.engine.config['output']=str(self.root/'old-report.xlsx')
+  with output.open('rb') as held:
+   response=json.load(self.call('configure',self.defaults))
+   self.assertTrue(response['ok']);self.service.tick()
+   self.assertEqual(held.read(),before)
+  self.assertEqual(output.stat().st_mtime_ns,stamp)
+  self.service.close()
+  self.service=SharedService(self.root/'home',defaults=self.defaults,shared_dir=self.root/'network')
+  self.server.service=self.service
+  self.assertEqual(self.service.engine.config['output'],str(output.resolve()))
+  self.assertTrue(json.load(self.call('configure',self.defaults))['ok'])
+  self.assertEqual(output.read_bytes(),before)
+  feed=output.parent/(output.stem+'_data')/'FaultReports.csv'
+  self.assertTrue(feed.exists())
+ def test_reusing_unrelated_existing_workbook_does_not_replace_it(self):
+  output=self.root/'network'/'Existing.xlsx';output.write_bytes(b'existing workbook bytes')
+  config=dict(self.defaults,output=str(output))
+  self.assertTrue(json.load(self.call('configure',config))['ok'])
+  self.service.tick();self.assertEqual(output.read_bytes(),b'existing workbook bytes')
+ def test_filter_existing_imports_and_use_screenshot_filename_time(self):
+  name='Print Screen 2026_10_02 08_37_27.png'
+  documents={
+   'PPG-HT-G.pdf':'Product guide PPG-HT-G',
+   'WO-004612326.pdf':'Work Order Information\nWork Order WO-004612326\nSubject Artifacts on conebeam\nClosure Summary Inspected imaging\nWork Order Times',
+   'normal.png':'Treatment screen - no active faults',
+   name:'Id: 136011\nName: SPV.SW.BEAM.MotionAxisNotAtPlan\nDescription: Treatment axis is not at plan\nDateTime: 29-Sep-2026 02:36:30 PM\nAdditional fault codes: 136011'}
+  for filename in documents:
+   folder=self.root/('reports' if filename.endswith('.pdf') else 'screens')
+   path=folder/filename;path.write_text('synthetic '+filename);os.utime(path,(1,1))
+  self.service.engine.configure(self.defaults,reuse_existing=True)
+  with patch('core.extract',side_effect=lambda path:documents[path.name]):
+   self.service.engine.scan(auto_export=False);self.service.engine.scan(auto_export=False)
+  self.service.engine.config['running']=False
+  # Simulate an old database row; the next state must derive its date from the file.
+  self.service.engine.db.execute("UPDATE records SET service_date='wrong OCR date' WHERE kind='screenshots'")
+  self.service.engine.db.commit()
+  state=self.service.state()
+  self.assertEqual(len(state['records']),2);self.assertEqual(len(state['excluded']),2)
+  fault=next(r for r in state['records'] if r['kind']=='screenshots')
+  self.assertEqual(fault['service_date'],'2026-10-02T08:37:27')
+  self.assertEqual(len(self.service.engine.rows()),4)
+  self.service.tick()
+  feed=self.root/'network'/'Report_data'/'ServiceReports.csv'
+  self.assertNotIn('PPG-HT-G',feed.read_text(encoding='utf-8-sig'))
+  self.assertIn('WO-004612326',feed.read_text(encoding='utf-8-sig'))
  def test_authentication_and_cross_origin(self):
   with self.assertRaises(HTTPError) as error:self.call('state',token=False)
   self.assertEqual(error.exception.code,403)

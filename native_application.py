@@ -1,5 +1,5 @@
 """Native Qt desktop interface. No HTML renderer, browser, or WebView."""
-import argparse, base64, csv, hashlib, json, os, queue, re, shutil, sys, tempfile, threading, time, uuid
+import argparse, base64, csv, hashlib, json, ntpath, os, queue, re, shutil, sys, tempfile, threading, time, uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -13,14 +13,22 @@ from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QVBoxLayout,QHBo
 from application_host import SharedService, Server, DEFAULTS, default_home, BASE
 from shared_application import Lease, connection_url, app_home, REPORT_FOLDER
 from report_export import date_value
+from core import clean_event_time
 
 REPORT_COLUMNS=[('service_date','Start / release',11),('work_order','Work order / case',10),
  ('category','Category',8),('issue','Subject',10),('fault_code','Error codes',7),
  ('work_performed','Summary of work',15),('parts_installed','Parts installed',10),
  ('engineer','Engineer',9),('work_hours','Hours',4),('service_status','Status',7),('sources','Service report',9)]
-FAULT_COLUMNS=[('service_date','Event date',11),('fault_code','Error codes',8),('fault_name','Fault name / severity',13),
+FAULT_COLUMNS=[('service_date','Event time',11),('fault_code','Error codes',8),('fault_name','Fault name / severity',13),
  ('issue','Error Details',20),('suggestions','SUGGESTED SOLUTION',18),
  ('work_performed','Resolution',18),('worker_initials','Initials',5),('sources','Screenshot',12)]
+
+def display_path(value):
+    text=str(value or '').strip()
+    if re.match(r'^[A-Za-z]:',text) or text.startswith(('\\\\','//')):
+        return ntpath.normpath(text)
+    return text
+
 
 class Signals(QObject):
     done=Signal(object);error=Signal(str)
@@ -99,6 +107,9 @@ def cell_value(record,key):
     if key=='fault_code':
         return '\n'.join(dict.fromkeys(re.findall(r'\b\d{4,7}\b',str(record.get('fault_code',''))+' '+str(record.get('additional_codes',''))))) or '-'
     if key=='service_date':
+        if record.get('kind')=='screenshots':
+            value=clean_event_time(record.get(key,''));parsed=date_value(value)
+            return parsed.strftime('%m/%d/%Y\n%I:%M:%S %p') if hasattr(parsed,'strftime') else (value or '-')
         value=record.get(key,'') or '-'
         if record.get('machine_release'):value+='\nRelease: '+record['machine_release']
         return value
@@ -300,7 +311,11 @@ class Window(QMainWindow):
     def import_details(self):
         dialog=QDialog(self);dialog.setWindowTitle('Import details');dialog.resize(760,400);layout=QVBoxLayout(dialog)
         text=QPlainTextEdit();text.setReadOnly(True)
-        text.setPlainText('\n\n'.join(str(r.get('issue') or r.get('path') or r.get('id'))+'\n'+str(r['error']) for r in self.records if r.get('error')) or 'No import errors.')
+        details=[str(r.get('issue') or r.get('path') or r.get('id'))+'\n'+str(r['error']) for r in self.records if r.get('error')]
+        for skipped in self.state.get('excluded',[]):
+            names=', '.join(Path(s.get('path','')).name for s in skipped.get('sources',[]))
+            details.append(names+'\n'+skipped['reason']+('\n'+skipped['error'] if skipped.get('error') else ''))
+        text.setPlainText('\n\n'.join(details) or 'No import errors or skipped files.')
         layout.addWidget(text);dialog.exec()
     def import_files(self):
         if not self.api:return
@@ -324,11 +339,11 @@ class Window(QMainWindow):
         dialog=QDialog(self);dialog.setWindowTitle('Folder settings');dialog.resize(760,280);form=QFormLayout(dialog)
         fields={};config=self.state.get('config',{})
         for key,label in [('reports','Service report folder'),('screenshots','Screenshot folder'),('output','Excel report')]:
-            row=QWidget();line=QHBoxLayout(row);line.setContentsMargins(0,0,0,0);edit=QLineEdit(str(config.get(key,'')));line.addWidget(edit,1)
+            row=QWidget();line=QHBoxLayout(row);line.setContentsMargins(0,0,0,0);edit=QLineEdit(display_path(config.get(key,'')));line.addWidget(edit,1)
             def browse(checked=False,k=key,e=edit):
                 if k=='output':path,_=QFileDialog.getSaveFileName(dialog,'Excel report',e.text(),'Excel workbook (*.xlsx)')
                 else:path=QFileDialog.getExistingDirectory(dialog,'Select folder',e.text())
-                if path:e.setText(path)
+                if path:e.setText(display_path(path))
             button=self.button('Choose…',browse);line.addWidget(button);form.addRow(label,row);fields[key]=edit
         info=QLabel('Folder locations are remembered. Report data updates every minute.');info.setWordWrap(True);form.addRow(info)
         running=QCheckBox('Monitor folders');running.setChecked(config.get('running',False));form.addRow(running)
@@ -337,7 +352,7 @@ class Window(QMainWindow):
             for edit in fields.values():edit.setReadOnly(True)
             buttons.button(QDialogButtonBox.Save).setEnabled(False);info.setText('Manage shared folder locations on the host computer.')
         def save():
-            payload={k:e.text().strip() for k,e in fields.items()};payload['running']=running.isChecked();buttons.setEnabled(False)
+            payload={k:display_path(e.text()) for k,e in fields.items()};payload['running']=running.isChecked();buttons.setEnabled(False)
             self.task(lambda:self.api.request('configure',payload),lambda _:dialog.accept(),lambda error:(buttons.setEnabled(True),self.alert(error)))
         buttons.accepted.connect(save);dialog.exec();self.tick()
     def add_fault(self):
@@ -381,8 +396,14 @@ class Window(QMainWindow):
         if not self.api:return
         filename,_=QFileDialog.getSaveFileName(self,'Export Report','TrueBeam_Service_Log.xlsx','Excel workbook (*.xlsx)')
         if not filename:return
+        configured=self.state.get('config',{}).get('output','')
+        if configured and os.path.normcase(str(Path(filename).resolve()))==os.path.normcase(str(Path(configured).resolve())):
+            self.task(lambda:self.api.request('export',{}),lambda _:self.message.setText('Report data refresh requested. The existing workbook stays open and is not replaced.'))
+            return
         def done(data):
-            try:Path(filename).write_bytes(data);self.message.setText('Report exported: '+filename)
+            try:
+                from live_report import atomic_write
+                atomic_write(Path(filename),data);self.message.setText('Report exported: '+filename)
             except OSError as exc:self.alert(str(exc))
         def work():
             from live_report import create_live_workbook

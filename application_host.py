@@ -68,14 +68,19 @@ class SharedService:
     def state(self):
         e=self.reader()
         try:
-            records=e.events()
+            from intake_policy import exclusion_reason
+            records=[];excluded=[]
+            for record in e.events():
+                reason=exclusion_reason(record)
+                if reason:excluded.append({'id':record['id'],'sources':record['sources'],'reason':reason,'error':record.get('error','')})
+                else:records.append(record)
             with self.connection() as db:attachments=db.execute('SELECT id,record_id,name FROM attachments ORDER BY id').fetchall()
             for r in records:
                 ids=[s['id'] for s in r['sources']];r['recordIds']=ids
                 if r['document_type']=='Therapist entry':
                     r['entryType']='manual'
                     r['sources']=[{'id':'a:'+str(a),'path':n,'error':''} for a,rid,n in attachments if rid in ids]
-            return dict(self.snapshot,records=records,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,database='Shared UFHPTI host database · edits save immediately.',shared=True)
+            return dict(self.snapshot,records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,database='Shared UFHPTI host database · edits save immediately.',shared=True)
         finally:e.db.close()
     def update(self,payload):
         field=payload.get('field')
@@ -136,7 +141,11 @@ class SharedService:
         text='';error=''
         try:text=extract(path).strip()
         except Exception as exc:error=str(exc)
-        fields=parse(text);e=self.reader()
+        fields=parse(text)
+        if kind=='screenshots':
+            from core import screenshot_file_time
+            fields['service_date']=screenshot_file_time(name)
+        e=self.reader()
         try:
             e.db.execute('BEGIN IMMEDIATE')
             old=e.db.execute('SELECT * FROM records WHERE path=?',(str(path),)).fetchone()
@@ -148,7 +157,7 @@ class SharedService:
         finally:e.db.close()
     def configure(self,payload):
         with self.scan_lock:
-            self.engine.configure(payload)
+            self.engine.configure(payload,reuse_existing=True)
             self.engine.config['running']=bool(payload.get('running',True))
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
             self.last_scan=-5;self.next_report=0

@@ -37,6 +37,34 @@ def ocr(image):
     from screenshot import recognize
     return recognize(image)
 
+IMAGE_SUFFIXES={'.png','.jpg','.jpeg','.tif','.tiff','.bmp','.webp'}
+def screenshot_file_time(path):
+    name=Path(str(path).replace(chr(92),'/')).name
+    # Prefer the explicit capture timestamp at the end of TerminateTasks filenames.
+    explicit=r'(?<!\d)(20\d{2})[_-](\d{2})[_-](\d{2})[ _T]+(\d{2})[_.:-](\d{2})[_.:-](\d{2})(?:[_.](\d{3,6}))?(?!\d)'
+    matches=list(re.finditer(explicit,name))
+    if not matches:
+        matches=list(re.finditer(r'(?<!\d)(20\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{3,6})?(?!\d)',name))
+    for match in reversed(matches):
+        try:
+            stamp=datetime(*[int(match.group(i)) for i in range(1,7)],microsecond=int((match.group(7) or '').ljust(6,'0') or 0))
+            return stamp.isoformat(timespec='milliseconds' if match.group(7) else 'seconds')
+        except ValueError:continue
+    return ''
+
+
+def clean_event_time(value):
+    text=re.split(r'(?im)^[ \t]*Additional fault codes\s*:',str(value or ''))[0].strip()
+    lines=[line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:return ''
+    value=lines[0]
+    if len(lines)>1 and re.fullmatch(r'[AP]M',lines[1],re.I):value+=' '+lines[1]
+    # OCR sometimes joins the year directly to the time.
+    value=re.sub(r'(\d{1,2}-[A-Za-z]{3}-\d{4})(?=\d{1,2}:)',r'\1 ',value)
+    value=re.sub(r'(?<=\d)(?=[AP]M\b)',' ',value,flags=re.I)
+    return value.strip()
+
+
 def parse(text):
     if 'Work Order Information' in text or 'CHECKLIST' in text[:1000].upper() or 'PARAMETER' in text[:1000].upper():
         from service_parser import parse_service
@@ -51,8 +79,9 @@ def parse(text):
             result[field] = match.group(1).strip()[:4000]
     aliases = {'fault_name':'name', 'severity':'severity', 'impact':'impact', 'issue':'description', 'cause':'causes?', 'suggestions':'suggestions?', 'service_date':r'date\s*time'}
     for field, label in aliases.items():
-        match = re.search(r'^\s*'+label+r'\s*[:=]\s*(.*?)(?=^\s*(?:id|name|severity|impact|description|causes?|suggestions?|date\s*time)\s*[:=]|\Z)',text,re.I|re.M|re.S)
+        match = re.search(r'^\s*'+label+r'\s*[:=]\s*(.*?)(?=^\s*(?:id|name|severity|impact|description|causes?|suggestions?|date\s*time|additional fault codes)\s*[:=]|\Z)',text,re.I|re.M|re.S)
         if match: result[field]=match.group(1).strip()[:4000]
+    result['service_date']=clean_event_time(result['service_date'])
     from fault_codes import find_codes
     result['fault_code'], codes = find_codes(text)
     result['additional_codes'] = ', '.join(code for code in codes if code != result['fault_code'])
@@ -85,7 +114,7 @@ class Engine:
         self.message = 'Choose two folders and an Excel output file to begin.'
         self.dirty = True
 
-    def configure(self, values):
+    def configure(self, values, *, reuse_existing=False):
         config = {k:str(values.get(k,'')).strip() for k in ('screenshots','reports','output')}
         for name in ('screenshots','reports'):
             folder = Path(config[name]).expanduser().resolve()
@@ -98,8 +127,11 @@ class Engine:
         output = Path(config['output']).expanduser().resolve()
         if output.suffix.lower() != '.xlsx' or not output.parent.is_dir():
             raise ValueError('Excel output must end in .xlsx and its parent folder must exist.')
-        # Never silently replace a pre-existing user workbook on initial setup.
-        if output.exists() and (str(output) != self.config['output'] or not self.config_path.exists()):
+        # Legacy exporters replace the workbook, so keep their initial-setup guard.
+        # SharedService explicitly reuses existing workbooks without rewriting them.
+        previous=Path(self.config['output']).expanduser().resolve()
+        same_output=os.path.normcase(str(output))==os.path.normcase(str(previous))
+        if not reuse_existing and output.exists() and (not same_output or not self.config_path.exists()):
             raise ValueError('That workbook already exists. Choose a new filename to preserve it.')
         config['output'] = str(output)
         config['running'] = True
@@ -115,7 +147,14 @@ class Engine:
         groups = {}
         links = dict(self.db.execute('SELECT source_id,target_id FROM links').fetchall())
         rows = self.rows()
+        manual_dates=set()
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='overrides'").fetchone():
+            manual_dates={r[0] for r in self.db.execute("SELECT record_id FROM overrides WHERE field='service_date'")}
         for row in reversed(rows):
+            if row['kind']=='screenshots':
+                if row.get('document_type')!='Therapist entry' and Path(row['path']).suffix.lower() in IMAGE_SUFFIXES and row['id'] not in manual_dates:
+                    row['service_date']=screenshot_file_time(row['path'])
+                else:row['service_date']=clean_event_time(row['service_date'])
             # Only merge automatically when an explicit event timestamp is present.
             normalized = lambda value: re.sub(r'\s+', '', value or '').lower()
             timestamp = row['service_date']
@@ -192,6 +231,7 @@ class Engine:
                         if (path.stat().st_size,path.stat().st_mtime_ns) != signature:
                             continue
                         fields = parse(text)
+                        if key=='screenshots' and path.suffix.lower() in IMAGE_SUFFIXES:fields['service_date']=screenshot_file_time(path)
                         # Preserve edited fields and notes when the source changes; require a fresh review.
                         if old:
                             previous = parse(old['text'] or '')

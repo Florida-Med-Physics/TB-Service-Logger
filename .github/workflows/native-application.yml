@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'native_application.py'
+      - 'core.py'
+      - 'application_host.py'
+      - 'intake_policy.py'
+      - 'live_report.py'
       - 'build_native_application.py'
       - 'verify_native_application.py'
       - 'requirements-native.txt'
@@ -34,7 +38,7 @@ jobs:
       - name: Test application and shared data
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest -q test_shared_application.py test_core.py test_native_application.py
+        run: python -m unittest -q test_shared_application.py test_core.py test_native_application.py test_intake_policy.py
       - name: Build and smoke-test packaged application
         run: python build_native_application.py
       - name: Upload standalone application
