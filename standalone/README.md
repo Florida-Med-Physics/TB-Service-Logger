@@ -16,7 +16,7 @@ Add fault opens a form with event date/time, therapist initials, error code and 
 Fault Reports has SUGGESTED SOLUTION, Resolution, Worker Initials, and Screenshot links. It has no Status or Machine column. Click plain-text values to edit; click longer descriptions for the full-text pop-up. Empty cells show a hyphen. Tables fit the page width and extend down the page.
 
 ## Excel
-In Folder settings, choose Export Report and select a dedicated .xlsx output file. Its contents are replaced by both complete tables from the database. It saves after changes and re-saves every 10 minutes while the page is open. Background throttling, computer sleep, lost write permissions, or an Excel file lock may delay saving; failures are shown and retried. Keep the workbook closed in Excel. Export Report saves immediately. Editing the Excel output does not update the database.
+In Folder settings, choose Export Report and select a dedicated .xlsx output file. Its contents are replaced by both complete tables from the database. It saves after changes and re-saves every minute while the page is open. Background throttling, computer sleep, lost write permissions, or an Excel file lock may delay saving; failures are shown and retried. Keep the workbook closed in Excel. Export Report saves immediately. Editing the Excel output does not update the database.
 
 ## Storage and validation
 Use the same HTML location and browser profile to retain browser data and remembered paths. Browser storage can be cleared by browser settings or organizational policy. Source folders and user documents are never uploaded or modified.

@@ -261,7 +261,7 @@ async function initStandalone(){
   $('reports').readOnly=true;$('screenshots').readOnly=true;
   $('reports').placeholder='Choose the service-report folder…';$('screenshots').placeholder='Choose the screenshot folder…';
   $('excel').textContent='Export Report';
-  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every 10 minutes.';
+  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every minute.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
   await poll();await initIntake();await initExcelSync();setInterval(poll,2000);
  }catch(e){notice('Browser database unavailable: '+(e.message||e)+'. Open the file in a regular Edge or Chrome window with browser storage enabled.',true);}

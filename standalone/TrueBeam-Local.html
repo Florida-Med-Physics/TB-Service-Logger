@@ -101,7 +101,7 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 <div class="table-foot"><span>Detailed messages determine the primary error code. Similar faults stay separate until linked.</span><span id="last-scan">No scan completed yet</span></div>
 </div>
 </section>
-<footer><span id="database-path">Database stored on this computer.</span><br>Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. The connected Export Report is saved after changes and re-saved every 10 minutes while this page is open.</footer>
+<footer><span id="database-path">Database stored on this computer.</span><br>Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. The connected Export Report is saved after changes and re-saved every minute while this page is open.</footer>
 </div>
 <details style="font-size:11px;color:var(--muted);margin-top:20px"><summary>Included open-source software</summary><pre style="white-space:pre-wrap">Tesseract.js
                                  Apache License
@@ -976,7 +976,7 @@ async function initStandalone(){
   $('reports').readOnly=true;$('screenshots').readOnly=true;
   $('reports').placeholder='Choose the service-report folder…';$('screenshots').placeholder='Choose the screenshot folder…';
   $('excel').textContent='Export Report';
-  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every 10 minutes.';
+  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every minute.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
   await poll();await initIntake();await initExcelSync();setInterval(poll,2000);
  }catch(e){notice('Browser database unavailable: '+(e.message||e)+'. Open the file in a regular Edge or Chrome window with browser storage enabled.',true);}
@@ -1029,7 +1029,7 @@ function excelWorkbook(records){
 function excelStatus(message,error=false){const node=$('excel-status');if(node){node.textContent=message;node.style.color=error?'#b23b31':'';}}
 async function syncExcel(force=false){
  if(!excelSync.handle||excelSync.busy||(!force&&Date.now()<excelSync.retryAt))return;
- const records=groupedEvents(),signature=JSON.stringify(records);if(!force&&signature===excelSync.signature&&Date.now()-excelSync.lastSaved<600000)return;
+ const records=groupedEvents(),signature=JSON.stringify(records);if(!force&&signature===excelSync.signature&&Date.now()-excelSync.lastSaved<60000)return;
  excelSync.busy=true;
  try{
   if(await excelSync.handle.queryPermission({mode:'readwrite'})!=='granted')throw new Error('Reconnect Excel file to grant write access.');
@@ -1049,7 +1049,7 @@ async function connectExcel(){
 }
 async function initExcelSync(){
  $('excel').onclick=async()=>{if(excelSync.handle){await syncExcel(true);}else{await connectExcel();}};
- const button=el('button','Choose Export Report');button.id='connect-excel';button.onclick=connectExcel;$('folder-dialog').querySelector('.dialog-body').append(button,el('p','Choose a dedicated output workbook. Its contents are replaced with both complete database tables after imports and edits, and re-saved every 10 minutes. Keep this page open; close the workbook in Excel to allow saving.','sub'));
+ const button=el('button','Choose Export Report');button.id='connect-excel';button.onclick=connectExcel;$('folder-dialog').querySelector('.dialog-body').append(button,el('p','Choose a dedicated output workbook. Its contents are replaced with both complete database tables after imports and edits, and re-saved every minute. Keep this page open; close the workbook in Excel to allow saving.','sub'));
  const status=el('span','Export Report not connected · choose an output file in Folder settings');status.id='excel-status';status.setAttribute('role','status');document.querySelector('.monitor-bar').append(status);
  excelSync.handle=await dbGet('settings','excel-output');
  if(excelSync.handle){button.textContent='Change Export Report';excelStatus('Export Report remembered · '+excelSync.handle.name);const reconnect=el('button','Reconnect Export Report');reconnect.onclick=async()=>{try{await excelSync.handle.requestPermission({mode:'readwrite'});excelSync.retryAt=0;await syncExcel(true);}catch(e){excelStatus(e.message,true);}};button.after(reconnect);await syncExcel();}
