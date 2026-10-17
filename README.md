@@ -1,6 +1,6 @@
 # TrueBeam Service Log
 
-## Local HTML — current interface\n\nOpen standalone/TrueBeam-Local.html in desktop Chrome or Edge. The HTML interface includes folder monitoring, Import files as a standard-file fallback, Import details for diagnostics, and Add fault for therapist entries with optional screenshots. See standalone/README.md. The same Excel output re-saves every minute while the page is open.\n\n## Native desktop application — alternate
+## Executable with the current HTML design\n\nThe current packaging uses html_application.py and build_html_application.py. It launches the existing HTML interface unchanged in Chrome or Edge and does not show the earlier native layout. Build on the target OS with python build_html_application.py; verify the embedded HTML with python verify_html_application.py. The Build HTML application workflow provides the Windows package. Read HTML APPLICATION START HERE.txt for usage and current local-only limitations.\n\n## Local HTML — current interface\n\nOpen standalone/TrueBeam-Local.html in desktop Chrome or Edge. The HTML interface includes folder monitoring, Import files as a standard-file fallback, Import details for diagnostics, and Add fault for therapist entries with optional screenshots. See standalone/README.md. The same Excel output re-saves every minute while the page is open.\n\n## Native desktop application — alternate
 
 Windows executable and Mac application with direct PDF/screenshot import and included offline OCR.
 
