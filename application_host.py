@@ -188,9 +188,11 @@ class Server(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self,address,service):
         self.service=service;super().__init__(address,Handler)
-        self.allowed_hosts={'localhost','127.0.0.1',socket.gethostname().lower(),socket.getfqdn().lower()}
-        try:self.allowed_hosts.update(socket.gethostbyname_ex(socket.gethostname())[2])
-        except OSError:pass
+        hostname=socket.gethostname().lower()
+        # Discovery always publishes this hostname. Avoid reverse-DNS lookups that
+        # can stall native startup on networks without reverse DNS configured.
+        self.allowed_hosts={'localhost','127.0.0.1',hostname,hostname.split('.')[0]}
+        if address[0] not in ('0.0.0.0',''):self.allowed_hosts.add(address[0])
     def valid_host(self,host):
         try:
             parsed=urlsplit('http://'+host)
