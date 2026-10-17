@@ -1,7 +1,7 @@
 TrueBeam Service Log - native desktop application
 
 WINDOWS
-Extract the entire ZIP. Open TrueBeam Service Log.exe. Keep the _internal folder beside it. The UF Proton icon appears on the executable and application window. No HTML file or browser is used for the application interface.
+Extract the ZIP and open the single TrueBeam Service Log.exe. No Python installation or companion _internal folder is needed. The UF Proton icon appears on the executable and application window. No HTML file or browser is used for the application interface.
 Connect U: and W: before opening the app on the UFHPTI network. The first Windows app hosts the shared database; keep its window/computer running for other staff.
 If U: is unavailable, the app opens a local workspace. Select Connection > Connect to shared UFHPTI log to remember the shared TrueBeamApp folder, then restart.
 

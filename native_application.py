@@ -417,7 +417,7 @@ def main():
             assert not any(c[0]=='service_status' for c in FAULT_COLUMNS)
             backend.stop.set();window.timer.stop();window.pool.waitForDone();backend.thread.join(timeout=10)
             window.grab().save(str(Path(args.self_test_report).with_suffix('.png')))
-            Path(args.self_test_report).write_text(json.dumps({'native':True,'browser':False,'tabs':window.tabs.count(),'icon':True,'platform':sys.platform}))
+            Path(args.self_test_report).write_text(json.dumps({'native':True,'browser':False,'tabs':window.tabs.count(),'icon':True,'platform':sys.platform,'loaded_ui_modules':[name for name in ('PySide6.QtWidgets','tkinter','_tkinter') if name in sys.modules]}))
         return
     folder=args.shared_folder
     if not args.local and not folder:
