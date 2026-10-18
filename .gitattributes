@@ -5,3 +5,7 @@
 *.command text eol=lf
 
 standalone/TrueBeam-Local.html linguist-generated=true -diff
+
+# All delivery formats embed identical HTML bytes, including on Windows.
+index.html text eol=lf
+standalone/*.html text eol=lf

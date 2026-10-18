@@ -6,6 +6,8 @@ on:
     paths:
       - 'index.html'
       - 'ui-policy.js'
+      - '.gitattributes'
+      - 'repair_webengine_bundle.py'
       - 'standalone/**'
       - '*application*.py'
       - 'application_host.py'

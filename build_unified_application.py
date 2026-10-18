@@ -23,6 +23,9 @@ else:raise SystemExit('Build on Windows or macOS.')
 args+=['--exclude-module','matplotlib','--exclude-module','pandas','--exclude-module','scipy',
        '--exclude-module','IPython','--exclude-module','pytest','--exclude-module','tkinter','unified_application.py']
 subprocess.run(args,check=True)
+if sys.platform=='darwin':
+    from repair_webengine_bundle import repair_mac_bundle
+    repair_mac_bundle(ROOT/'dist-unified'/'TrueBeam Service Log.app')
 subprocess.run([sys.executable,str(ROOT/'verify_unified_application.py')],check=True)
 if sys.platform=='win32':
     executable=ROOT/'dist-unified'/'TrueBeam Service Log.exe'
