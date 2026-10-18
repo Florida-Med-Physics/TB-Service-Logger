@@ -16,7 +16,10 @@ function dbPut(store,value,key){return new Promise((resolve,reject)=>{const tx=b
 async function refreshLocalRecords(){browserStore.records=await dbAll();for(const record of browserStore.records){if(record.review==='Needs review'){record.review='Closure documented';await dbPut('records',record);}}}
 function groupedEvents(){
  const groups=new Map();
- for(const record of browserStore.records.slice().sort((a,b)=>a.id-b.id)){
+ for(const stored of browserStore.records.slice().sort((a,b)=>a.id-b.id)){
+  const record={...stored};
+  if(record.kind==='screenshots'&&record.entryType!=='manual'&&!record.userDate)record.service_date=uiFilenameTime(record.path||record.key);
+  if(uiExclusionReason(record))continue;
   const norm=v=>String(v||'').replace(/\s/g,'').toLowerCase();
   const key=record.linkTarget?JSON.stringify(['manual',record.kind,record.linkTarget]):record.entryType==='manual'?JSON.stringify(['therapist',record.key]):record.kind==='screenshots'&&record.fault_code&&record.service_date?JSON.stringify(['fault',...['machine','fault_code','fault_name','service_date','issue'].map(k=>norm(record[k]))]):JSON.stringify(['file',record.kind,record.digest||record.key]);
   if(!groups.has(key))groups.set(key,{...record,sources:[],recordIds:[],possible_duplicate:false});
@@ -198,7 +201,7 @@ function csvExport(){
 }
 
 async function localApi(route,body){
- if(route==='state')return new Response(JSON.stringify({records:groupedEvents(),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Export Report saves both tables to Excel.'}));
+ if(route==='state')return new Response(JSON.stringify({records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Export Report saves both tables to Excel.'}));
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');
@@ -247,7 +250,7 @@ async function localApi(route,body){
   if(![...LOCAL_FIELDS,'review'].includes(body.field))throw new Error('Unknown field.');
   if(body.field==='review'&&!['Reviewed','Closure documented'].includes(body.value))throw new Error('Invalid status.');
   const event=groupedEvents().find(r=>r.id===Number(body.id));if(!event)throw new Error('Entry no longer exists.');
-  const changed=await Promise.all((event.recordIds||event.sources.map(s=>s.id)).map(async id=>{const old=await dbGet('records',id);if(!old)throw new Error('Source no longer exists.');return {...old,[body.field]:String(body.value)};}));
+  const changed=await Promise.all((event.recordIds||event.sources.map(s=>s.id)).map(async id=>{const old=await dbGet('records',id);if(!old)throw new Error('Source no longer exists.');return {...old,[body.field]:String(body.value),...(body.field==='service_date'?{userDate:true}:{})};}));
   await new Promise((resolve,reject)=>{const tx=browserStore.db.transaction('records','readwrite');for(const record of changed)tx.objectStore('records').put(record);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
   await refreshLocalRecords();return new Response(JSON.stringify({ok:true}));
  }

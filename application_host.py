@@ -225,6 +225,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         route=urlsplit(self.path)
         if not self.server.valid_host(self.headers.get('Host','')):return self.respond(403,{'error':'Use the UFHPTI host app address.'})
+        if route.path=='/' and getattr(self.server.service,'unified_html',False):return self.respond(200,(BASE/'standalone'/'TrueBeam-Local.html').read_bytes(),'text/html; charset=utf-8')
         if route.path=='/':
             page=(BASE/'index.html').read_text()
             page=page.replace("if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});","if(typeof sharedSaveField==='function')await sharedSaveField(record,field,value);else if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});")

@@ -1,42 +1,40 @@
+"""Build one HTML artifact for browser, Windows, and Mac interfaces."""
 from pathlib import Path
-import argparse,base64,json,html
-parser=argparse.ArgumentParser();parser.add_argument('--node-modules',required=True);parser.add_argument('--english',required=True)
+import argparse,base64,json,re,hashlib,html
+parser=argparse.ArgumentParser()
+parser.add_argument('--node-modules');parser.add_argument('--english');parser.add_argument('--reuse-assets')
 args=parser.parse_args()
 root=Path(__file__).resolve().parent.parent
-modules=Path(args.node_modules)
-assets={
- 'ocrWorker':modules/'tesseract.js/dist/worker.min.js',
- 'ocrCore':modules/'tesseract.js-core/tesseract-core-lstm.wasm.js',
- 'eng':Path(args.english),
- 'pdf':modules/'pdfjs-dist/legacy/build/pdf.min.mjs',
- 'pdfWorker':modules/'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-}
-embedded={name:base64.b64encode(path.read_bytes()).decode('ascii') for name,path in assets.items()}
-api=(modules/'tesseract.js/dist/tesseract.min.js').read_text()
-runtime=(root/'standalone/browser-runtime.js').read_text()+'\n'+(root/'standalone/excel-runtime.js').read_text()+'\n'+(root/'standalone/intake-runtime.js').read_text()
-page=(root/'index.html').read_text()
-page=page.replace('Local database · files stay on this computer','Local HTML · offline')
-page=page.replace('Select folders on this computer or a mapped network drive. Existing files are included.','Use Edge or Chrome to choose two folders. This HTML runs offline; no launcher or server is needed.')
-page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Monitoring runs while this page is open. The browser may slow checks in background tabs. Reconnect folder permissions when prompted. The connected Export Report is saved after changes and re-saved every minute while this page is open.')
-start=page.index('async function api(path,body){')
-end=page.index('\nasync function command(',start)
-page=page[:start]+'async function api(path,body){return localApi(path,body);}'+page[end:]
-page=page.replace("api('browse',{})","api('browse',{kind:button.dataset.for})")
-page=page.replace("await download('excel','TrueBeam Service Log.xlsx');","await download('excel',kind==='reports'?'TrueBeam Service Reports.csv':'TrueBeam Fault Reports.csv');")
-page=page.replace("notice('Downloading the latest completed Excel export. Entries from a scan in progress will appear in the next export.');","notice('Downloading a CSV of the selected tab.');")
-page=page.replace("download('backup','TrueBeam Service Log.sqlite3')","download('backup','TrueBeam Database Backup.json')")
-page=page.replace("if(location.protocol==='file:'||!token){$('launcher').hidden=false;$('workspace').hidden=true;}else{poll();setInterval(poll,2000);}","""$('launcher').hidden=true;$('workspace').hidden=false;
-initStandalone();""")
+output=root/'standalone'/'TrueBeam-Local.html'
+previous=Path(args.reuse_assets).read_text() if args.reuse_assets else output.read_text()
+scripts=list(re.finditer(r'<script([^>]*)>(.*?)</script>',previous,re.S))
+embedded=json.loads(next(m.group(2) for m in scripts if 'id="embedded-assets"' in m.group(1)))
+library=next(m.group(2) for m in scripts if m.group(2).startswith('/*! For license information please see tesseract.min.js'))
+if args.node_modules:
+ modules=Path(args.node_modules)
+ assets={'ocrWorker':modules/'tesseract.js/dist/worker.min.js','ocrCore':modules/'tesseract.js-core/tesseract-core-lstm.wasm.js','eng':Path(args.english),'pdf':modules/'pdfjs-dist/legacy/build/pdf.min.mjs','pdfWorker':modules/'pdfjs-dist/legacy/build/pdf.worker.min.mjs'}
+ embedded={name:base64.b64encode(path.read_bytes()).decode() for name,path in assets.items()}
+ library=(modules/'tesseract.js/dist/tesseract.min.js').read_text()
+runtime='\n'.join((root/'standalone'/name).read_text() for name in ('browser-runtime.js','excel-runtime.js','intake-runtime.js','shared-adapter.js'))
+page=(root/'index.html').read_text();ui_hash=hashlib.sha256(page.encode()).hexdigest()
+page=page.replace('</head>','<meta name="truebeam-ui-sha256" content="'+ui_hash+'"></head>')
+start=page.index('async function api(path,body){');end=page.index('\nasync function command(',start)
+network=page[start:end]
+network=network.replace('async function api(path,body){','async function api(path,body){\n if(!USE_SHARED)return localApi(path,body);\n if(window.truebeamNativeRequest&&path!==\"browse\"){const result=await window.truebeamNativeRequest(path,body);return new Response(Uint8Array.from(atob(result.data),c=>c.charCodeAt(0)),{headers:{\"Content-Type\":result.type}});}\n if(path==="browse"&&window.truebeamNativeReady){const bridge=await window.truebeamNativeReady;const data=JSON.parse(await new Promise(resolve=>bridge.pick(body?.kind||"reports",resolve)));if(data.error)throw new Error(data.error);return new Response(JSON.stringify(data));}\n')
+page=page[:start]+network+page[end:]
+page=page.replace('let state=null,kind=',"const USE_SHARED=Boolean(window.TRUEBEAM_DESKTOP)||(/^https?:$/.test(location.protocol)&&Boolean(token));\nlet state=null,kind=")
+page=page.replace("if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});","if(USE_SHARED)await sharedSaveField(record,field,value);else if(typeof localApi==='function')await api('inline-update',{id:record.id,field,value});")
+old="if(location.protocol==='file:'||!token){$('launcher').hidden=false;$('workspace').hidden=true;}else{poll();setInterval(poll,2000);}"
+assert old in page
+page=page.replace(old,"$('launcher').hidden=true;$('workspace').hidden=false;\nif(USE_SHARED)initShared();else initStandalone();")
+page=page.replace('Local database · files stay on this computer','Local files · UFHPTI Physics')
+page=page.replace('Monitoring runs while the launcher is open. Original files are never changed. All extracted entries require review.','Monitoring runs while this interface is open. Original files are retained. Open Import details to inspect skipped files.')
 marker="<script>\n'use strict';"
-def script_text(value):return value.replace('</script','<\\/script')
-injection='<script type="application/json" id="embedded-assets">'+json.dumps(embedded,separators=(',',':'))+'</script>\n<script>const EMBEDDED=JSON.parse(document.getElementById("embedded-assets").textContent);</script>\n<script>'+script_text(api)+'</script>\n<script>'+script_text(runtime)+'</script>\n'
-assert marker in page
+def safe(value):return value.replace('</script','<\\/script')
+injection='<script type="application/json" id="embedded-assets">'+json.dumps(embedded,separators=(',',':'))+'</script>\n<script>const EMBEDDED=JSON.parse(document.getElementById("embedded-assets").textContent);</script>\n<script>'+safe(library)+'</script>\n<script>'+safe(runtime)+'</script>\n'
 page=page.replace(marker,injection+marker,1)
-licenses=[]
-for name,path in [('Tesseract.js',modules/'tesseract.js/LICENSE.md'),('Tesseract.js core',modules/'tesseract.js-core/LICENSE'),('PDF.js',modules/'pdfjs-dist/LICENSE')]:
- if path.exists():licenses.append(name+'\n'+path.read_text())
-licenses.append('English OCR data: tesseract-ocr/tessdata_fast, eng.traineddata; Apache License 2.0. https://github.com/tesseract-ocr/tessdata_fast')
-page=page.replace('</main>','<details style="font-size:11px;color:var(--muted);margin-top:20px"><summary>Included open-source software</summary><pre style="white-space:pre-wrap">'+html.escape('\n\n'.join(licenses))+'</pre></details></main>',1)
-output=root/'standalone/TrueBeam-Local.html'
+license_match=re.search(r'<details[^>]*>.*?<summary>Included open-source software</summary>.*?</details>',previous,re.S)
+if license_match:page=page.replace('</main>',license_match.group(0)+'</main>',1)
 output.write_text(page,encoding='utf-8')
-print('Built:',output.name,round(output.stat().st_size/1024/1024,1),'MB; all OCR, language and PDF assets embedded.')
+(root/'standalone'/'ui-manifest.json').write_text(json.dumps({'ui_sha256':ui_hash,'html_sha256':hashlib.sha256(page.encode()).hexdigest(),'source':'index.html'},indent=2))
+print('Built one shared HTML interface:',output.stat().st_size,'bytes; UI SHA256',ui_hash)

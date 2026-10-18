@@ -72,13 +72,14 @@ async function retryImportProblems(){
 }
 function showImportDetails(){
  let dialog=$('import-details');if(!dialog){const created=intakeDialog('import-details','Import details');dialog=created.dialog;}
- const body=dialog.querySelector('.dialog-body');body.replaceChildren(el('p','Files with unreadable text stay in the table, and their originals can still be opened. If folder access is blocked on this computer, use Import files to select PDFs and PNGs directly.'));
+ const body=dialog.querySelector('.dialog-body');body.replaceChildren(el('p','Skipped or unreadable files remain available here, outside the report tables. If folder access is blocked on this computer, use Import files to select PDFs and PNGs directly.'));
  const problems=browserStore.records.filter(r=>r.error),summary=el('p',browserStore.records.length+' source entries · '+problems.length+' extraction problems');body.append(summary);
  if(problems.length){const retry=el('button','Retry problem files');retry.onclick=()=>retryImportProblems().catch(e=>notice(e.message,true));body.append(retry);}
  for(const record of browserStore.records.filter(r=>r.entryType!=='manual')){
   const section=el('div',undefined,'source');section.append(el('strong',record.path),el('p',record.error||'Imported successfully.'));
   const button=el('button','Open original');button.type='button';button.onclick=()=>openSource(record.id);section.append(button);body.append(section);
  }
+ for(const skipped of (state?.excluded||[])){const section=el('div',undefined,'source');section.append(el('strong',skipped.sources.map(s=>s.path.split(/[\\/]/).pop()).join(', ')),el('p',skipped.reason));for(const source of skipped.sources){const open=el('button','Open original');open.onclick=()=>openSource(source.id);section.append(open);}body.append(section);}
  if(!browserStore.records.length)body.append(el('p','No entries yet. Choose folders and start monitoring, or use Import files.'));
  if(!dialog.open)dialog.showModal();
 }

@@ -56,9 +56,9 @@ class Api:
 
 class Backend:
     """Own the host lease and service on one dedicated thread."""
-    def __init__(self,folder=None,local=False,home=None,defaults=None):
+    def __init__(self,folder=None,local=False,home=None,defaults=None,unified=False):
         self.ready=queue.Queue();self.stop=threading.Event();self.host=False
-        self.folder=folder;self.local=local;self.home=home;self.defaults=defaults
+        self.unified=unified;self.folder=folder;self.local=local;self.home=home;self.defaults=defaults
         self.thread=threading.Thread(target=self.run,daemon=True);self.thread.start()
     def run(self):
         service=None;server=None;lease=None
@@ -85,6 +85,7 @@ class Backend:
                     for suffix in ('-wal','-shm'):(home/('service-log.sqlite3'+suffix)).unlink(missing_ok=True)
                     shutil.copy2(durable,home/'service-log.sqlite3')
                 service=SharedService(home,shared_dir=folder);address='0.0.0.0'
+            service.unified_html=self.unified
             self.host=True
             try:server=Server((address,8766 if not self.local else 0),service)
             except OSError:server=Server((address,0),service)

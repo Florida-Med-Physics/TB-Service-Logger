@@ -1,0 +1,2 @@
+-r requirements-native.txt
+PySide6==6.10.2

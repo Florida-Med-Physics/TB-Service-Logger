@@ -1,25 +1,27 @@
-# TrueBeam Service Log — native desktop application
+# TrueBeam Service Log
 
-Download the **native Windows or Mac application** from the [native desktop release](https://github.com/Florida-Med-Physics/TB-Service-Logger/releases/tag/v1.3.0).
+[Download HTML, Mac, or Windows](https://github.com/Florida-Med-Physics/TB-Service-Logger/releases/latest).
 
-The app opens directly in its own desktop window with the UF Proton icon. Its interface uses native Qt controls; it does not open a browser or load an HTML page.
+All three versions use the **same HTML interface file**, including Service Reports, Fault Reports, dark mode, sorting, editable fields, screenshot links, therapist entries, filename timestamps, and import filtering.
 
-- Windows: extract **TrueBeam-Service-Log-Windows-x64.zip**, then run **TrueBeam Service Log.exe** — this is one self-contained executable, packaged the same way as EMBRACE.
-- Mac (Apple Silicon): extract **TrueBeam-Service-Log-macOS-arm64.zip**, then open **TrueBeam Service Log.app**.
-- Screenshot event times come from their filenames. Images without an identifiable fault and unrelated PDFs are omitted from report tables; skipped files remain in Import details.
-- Existing Excel report paths can be reused after saving settings or restarting; an open workbook is preserved while its data feeds update.
-- Service Reports and Fault Reports are separate tabs. Double-click values to view/edit, and attached PDFs/PNGs to open in the default viewer.
-- Shared UFHPTI paths are preset. The first Windows instance hosts the shared log; keep it running for other staff. Without a shared drive, the app opens a local workspace.
-- The app saves edits immediately. Background Excel feeds publish every minute without replacing an open workbook. **Export Report** writes a fresh standalone snapshot.
-- Builds are unsigned; network deployment and automatic Excel refresh still need UFHPTI confirmation.
+- **Windows:** Run TrueBeam-Service-Log-Windows.exe. It is a single executable with the UF Proton icon and opens in its own application window.
+- **Mac (Apple Silicon):** Extract the macOS-arm64 ZIP and open TrueBeam Service Log.app.
+- **HTML:** Download TrueBeam-Local.html and open it in desktop Chrome or Edge. PDF and OCR assets are embedded for offline use.
 
-Older HTML/browser launchers and the earlier Tk interface remain in source for reference. Use the **Native** downloads above.
+The Mac and Windows applications display the HTML inside their dedicated application windows. A separate browser tab is not used. Both packages embed the exact downloadable HTML; UI and file hashes are recorded in ui-manifest.json and checked during build tests.
+
+## Data and folders
+
+Desktop applications retain the shared UFHPTI database and preset U:/W: folder locations. Keep the hosting Windows application running for other clients. Without a shared folder selected, an app opens a local workspace. Folder locations remain saved.
+
+The standalone HTML uses its browser profile's local database and browser-granted folder handles. Browser storage is separate from the desktop/shared database. Monitoring requires keeping the interface open. In HTML mode, Excel snapshot saving can be delayed if Excel locks the output file; desktop mode publishes shared report data feeds without replacing the open workbook.
 
 ## Development
 
-Install requirements-native.txt, then run python native_application.py --local.
-Build on the destination OS with python build_native_application.py. This also smoke-tests the executable and creates the ZIP, using the same PyInstaller version, Windows one-file mode, Mac app-bundle mode, and build runners as EMBRACE.
-Run python verify_native_application.py to verify the packaged native interface.
+Install requirements-unified.txt. Run unified_application.py --local for a desktop window, or open standalone/TrueBeam-Local.html in Chrome or Edge.
 
+standalone/build_standalone.py builds the common interface. It reuses the PDF/OCR assets already embedded in the HTML, so rebuilding does not require network downloads.
 
-Older interfaces are documented in docs/legacy-interfaces.md for reference only.
+build_unified_application.py builds, launches a packaged UI smoke test, and archives the app using the EMBRACE packaging pattern: one Windows executable and one Mac application bundle.
+
+Older launchers are retained in source for reference only. Use the latest release downloads.

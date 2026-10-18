@@ -77,6 +77,9 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 @media(max-width:760px){colgroup{display:none}td{padding:7px 4px}}
 
 .compact-value.code{white-space:pre-line!important;overflow:visible;text-overflow:clip}
+
+.sort-column,[data-theme="dark"] .sort-column{white-space:normal;overflow-wrap:anywhere;max-width:100%}
+.editable-value,[data-theme="dark"] .editable-value{white-space:pre-line}
 </style>
 </head>
 <body>
@@ -121,6 +124,37 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 </dialog>
 <script>
 'use strict';
+/* Common validation and filename timestamps used by every delivery format. */
+function uiFilenameTime(path){
+ const name=String(path||'').split(/[\\/]/).pop(),explicit=/(?<!\d)(20\d{2})[_-](\d{2})[_-](\d{2})[ _T]+(\d{2})[_.:-](\d{2})[_.:-](\d{2})(?:[_.](\d{3,6}))?(?!\d)/g;
+ let matches=[...name.matchAll(explicit)];
+ if(!matches.length)matches=[...name.matchAll(/(?<!\d)(20\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{3,6})?(?!\d)/g)];
+ for(const m of matches.reverse()){
+  const parts=m.slice(1,7).map(Number),d=new Date(Date.UTC(parts[0],parts[1]-1,...parts.slice(2)));
+  if(d.getUTCFullYear()!==parts[0]||d.getUTCMonth()+1!==parts[1]||d.getUTCDate()!==parts[2]||parts[3]>23||parts[4]>59||parts[5]>59)continue;
+  return m[1]+'-'+m[2]+'-'+m[3]+'T'+m[4]+':'+m[5]+':'+m[6]+(m[7]?'.'+m[7].slice(0,3).padEnd(3,'0'):'');
+ }
+ return '';
+}
+function uiExclusionReason(r){
+ if(r.entryType==='manual'||r.document_type==='Therapist entry')return r.issue||r.fault_code||r.fault_name?'':'Empty therapist entry.';
+ const text=String(r.text||''),issue=String(r.issue||''),codes=String(r.fault_code||'')+' '+String(r.additional_codes||'');
+ if(r.kind==='screenshots'){
+  if(/\b(?:\d{4}|\d{6})\b/.test(codes)||r.fault_name)return '';
+  if(issue&&!/\b(?:no|zero)\s+(?:active\s+)?(?:faults?|errors?|interlocks?)\b/i.test(issue)&&(r.severity||r.cause||r.impact||/\b(?:fault|error|interlock|failed|failure|mismatch)\b/i.test(issue)))return '';
+  return 'No identifiable fault was found in this screenshot.';
+ }
+ const header=/\b(?:work\s+order\s+information|field\s+service\s+report|service\s+report)\b/i.test(text),labelled=/\b(?:closure\s+summary|problem\s+description|work\s+performed\s+comments)\b/i.test(text),wo=/\bWO[-\s]*\d{5,}\b/i.test(String(r.work_order||'')+' '+text);
+ if([r.issue,r.work_performed,r.service_date,r.engineer,r.work_order].some(Boolean)&&(header||(wo&&labelled)))return '';
+ if(/\b(?:checklist|parameters?)\b/i.test(text)&&(/\b(?:PMP|PMI|prevent(?:ive|ative)\s+maintenance)\b/i.test(text)||/\bH\d{6}\b/.test(text))&&text.trim().length>=20)return '';
+ return 'This file is not a recognizable service or maintenance report.';
+}
+function uiEventTime(value){
+ const text=String(value||'').split(/Additional fault codes:/i)[0].trim();
+ const date=new Date(text);
+ return Number.isNaN(date.getTime())?(text.split('\n')[0]||'-'):date.toLocaleDateString()+'\n'+date.toLocaleTimeString();
+}
+
 const $=id=>document.getElementById(id);
 function updateThemeToggle(){
  const dark=document.documentElement.dataset.theme==='dark';
@@ -149,7 +183,7 @@ function cell(row,text,cls){const td=el('td',undefined,cls);if(text instanceof N
 
 const SORT_OPTIONS={
  reports:[['service_date','Start date','date'],['machine_release','Release date','date'],['work_order','Work order'],['case_number','Case number'],['category','Category'],['issue','Subject'],['work_performed','Summary of work'],['parts_installed','Parts installed'],['fault_code','Error code'],['engineer','Engineer'],['work_hours','Work hours','number'],['downtime_hours','Downtime hours','number'],['service_status','Status'],['sources','Source count','number']],
- screenshots:[['service_date','Event date','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','SUGGESTED SOLUTION'],['work_performed','Resolution'],['worker_initials','Worker Initials'],['sources','Source count','number']]
+ screenshots:[['service_date','Event time','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','SUGGESTED SOLUTION'],['work_performed','Resolution'],['worker_initials','Worker Initials'],['sources','Source count','number']]
 };
 let tableSort={reports:{key:'service_date',direction:'desc'},screenshots:{key:'service_date',direction:'desc'}};
 try{const saved=JSON.parse(localStorage.getItem('truebeam-table-sort'));for(const tab of Object.keys(tableSort))if(saved?.[tab]&&SORT_OPTIONS[tab].some(o=>o[0]===saved[tab].key)&&['asc','desc'].includes(saved[tab].direction))tableSort[tab]=saved[tab];}catch{}
@@ -189,7 +223,7 @@ function inlineField(record,field,expanded=false){
  if(!expanded){
   const secondary=['machine_release','case_number','additional_codes','severity','work_hours','downtime_hours'].includes(field);
   const prefix={machine_release:'Release: ',case_number:'Case ',additional_codes:'Other: ',work_hours:'Work hrs: ',downtime_hours:'Downtime hrs: '}[field]||'';
-  const text=record[field]?prefix+record[field]:'-';
+  const text=field==='service_date'&&record.kind==='screenshots'?uiEventTime(record[field]):(record[field]?prefix+record[field]:'-');
   const button=el('button',text,'editable-value'+(secondary?' secondary':'')+(['fault_code','additional_codes'].includes(field)?' code':'')+(['review','service_status'].includes(field)?' badge':''));
   button.type='button';button.title='Edit '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Edit '+fieldLabel(field,record.kind)+' for entry '+record.id);
   button.onclick=()=>{
@@ -234,7 +268,7 @@ let visible=displayedRecords();syncSortControls();
  let cols=table.querySelector('colgroup');if(!cols){cols=el('colgroup');table.prepend(cols);}
  const widths=kind==='reports'?[10,10,7,12,8,15,9,9,5,8,7]:[10,9,13,18,18,15,6,11];
  cols.replaceChildren(...widths.map(width=>{const col=el('col');col.style.width=width+'%';return col;}));
-const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject','Error Codes','Summary of work','Parts installed','Engineer','Hours','Status','Service report']:['Event date','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Screenshot'];
+const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject','Error Codes','Summary of work','Parts installed','Engineer','Hours','Status','Service report']:['Event time','Error code','Fault name / severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Screenshot'];
 $('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','fault_code','work_performed','parts_installed','engineer','work_hours','service_status','sources']:['service_date','fault_code','fault_name','issue','suggestions','work_performed','worker_initials','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
 
 for(const record of visible){
@@ -267,7 +301,7 @@ $('raw').textContent=selected.text||'No text extracted.';$('source-list').replac
 $('merge-target').replaceChildren(el('option','Choose an entry to retain…'));$('merge-target').firstChild.value='';
 for(const row of state.records.filter(r=>r.kind===selected.kind&&r.id!==selected.id)){const option=el('option','#'+row.id+' · '+(row.work_order||row.fault_code||'Unknown code')+' · '+(row.service_date||row.issue||''));option.value=row.id;$('merge-target').append(option);}
 $('detail').showModal();}
-async function openSource(id){const popup=window.open('about:blank','_blank');try{const response=await api('source?id='+id);const blob=await response.blob();const url=URL.createObjectURL(blob);if(popup){popup.opener=null;popup.location=url;}else{const a=el('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();}setTimeout(()=>URL.revokeObjectURL(url),300000);}catch(error){if(popup)popup.close();notice(error.message,true);}}
+async function openSource(id){if(window.truebeamNativeReady){const bridge=await window.truebeamNativeReady;bridge.source(String(id));return;}const popup=window.open('about:blank','_blank');try{const response=await api('source?id='+id);const blob=await response.blob();const url=URL.createObjectURL(blob);if(popup){popup.opener=null;popup.location=url;}else{const a=el('a');a.href=url;a.target='_blank';a.rel='noopener';a.click();}setTimeout(()=>URL.revokeObjectURL(url),300000);}catch(error){if(popup)popup.close();notice(error.message,true);}}
 async function download(route,filename){try{const response=await api(route);const url=URL.createObjectURL(await response.blob());const a=el('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}catch(error){notice(error.message,true);}}
 $('edit-form').onsubmit=async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.target));const result=await command('update',{id:selected.id,...data});if(result)$('detail').close();};
 $('close').onclick=()=>$('detail').close();$('merge').onclick=async()=>{const target=$('merge-target').value;if(!target)return;const result=await command('merge',{source:selected.id,target:Number(target)});if(result)$('detail').close();};
@@ -277,7 +311,7 @@ $('search').oninput=render;$('review-filter').onchange=render;
 $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim()});$('pause').onclick=()=>command('pause');$('scan').onclick=()=>command('scan');$('retry').onclick=()=>command('retry');
 $('excel').onclick=async()=>{notice('Downloading the latest completed Excel export. Entries from a scan in progress will appear in the next export.');await download('excel','TrueBeam Service Log.xlsx');};
 
-document.querySelectorAll('.browse').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await(await api('browse',{})).json();if(result.path)$(button.dataset.for).value=result.path;}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
+document.querySelectorAll('.browse').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await(await api('browse',{kind:button.dataset.for})).json();if(result.path)$(button.dataset.for).value=result.path;}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
 if(location.protocol==='file:'||!token){$('launcher').hidden=false;$('workspace').hidden=true;}else{poll();setInterval(poll,2000);}
 </script>
 </body></html>
