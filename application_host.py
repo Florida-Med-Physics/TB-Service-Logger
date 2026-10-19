@@ -80,7 +80,7 @@ class SharedService:
                 if r['document_type']=='Therapist entry':
                     r['entryType']='manual'
                     r['sources']=[{'id':'a:'+str(a),'path':n,'error':''} for a,rid,n in attachments if rid in ids]
-            return dict(self.snapshot,records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,database='Shared UFHPTI host database · edits save immediately.',shared=True)
+            return dict(self.snapshot,folders_connected=all(self.engine.config.get(k) and os.path.isdir(self.engine.config[k]) and os.access(self.engine.config[k],os.R_OK) for k in ('reports','screenshots')),records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,database='Shared UFHPTI host database · edits save immediately.',shared=True)
         finally:e.db.close()
     def update(self,payload):
         field=payload.get('field')

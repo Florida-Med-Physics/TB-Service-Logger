@@ -80,6 +80,7 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 
 .sort-column,[data-theme="dark"] .sort-column{white-space:normal;overflow-wrap:anywhere;max-width:100%}
 .editable-value,[data-theme="dark"] .editable-value{white-space:pre-line}
+#folder-connection.connected{background:#187647;color:#fff;border-color:#187647}#folder-connection{font-weight:700}
 </style>
 </head>
 <body>
@@ -89,7 +90,7 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 <div id="workspace">
 <div class="intro"><p>Keep service history and fault evidence together. Search, review, and trace every entry to its source.</p><div class="exports"><button id="excel">Export Report</button></div></div>
 <div role="status" id="notice" class="notice" aria-live="polite"></div>
-<div class="monitor-bar"><button id="folder-settings">Folder settings</button><div class="status"><span id="dot" class="dot"></span><span id="monitor-status">Connecting…</span></div></div>
+<div class="monitor-bar"><button id="folder-settings">Folder settings</button><button id="folder-connection" type="button">Connect folders</button><div class="status"><span id="dot" class="dot"></span><span id="monitor-status">Connecting…</span></div></div>
 <section class="stats" aria-label="Database summary">
 <div class="card stat"><span>Service reports</span><strong id="stat-reports">0</strong><small>documents</small></div>
 <div class="card stat"><span>Fault reports</span><strong id="stat-faults">0</strong><small>events</small></div>
@@ -285,6 +286,7 @@ for(const record of visible){
 $('results').textContent=visible.length+' of '+all.filter(r=>r.kind===kind).length+' entries';$('empty').hidden=visible.length>0;$('empty').querySelector('h3').textContent=query||filter?'No matching entries':kind==='reports'?'No service reports yet':'No fault reports yet';
 $('last-scan').textContent=state.last_scan?'Last scan: '+state.last_scan:'No scan completed yet';$('database-path').textContent='Database: '+state.database;
 $('dot').className='dot'+(state.busy?' busy':state.config.running?' active':'');$('monitor-status').textContent=(state.config.running?'Monitoring · ':state.busy?'Scanning · ':'Paused · ')+state.message;
+$('folder-connection').textContent=state.folders_connected?'Connection Established':'Connect folders';$('folder-connection').classList.toggle('connected',Boolean(state.folders_connected));
 $('start').textContent=state.config.running?'Save folders & monitor':'Start monitoring';
 }
 async function poll(){if(polling)return;polling=true;try{state=await(await api('state')).json();for(const r of state.records){if(r.review==='Needs review')r.review='Closure documented';if(r.service_status==='Needs review')r.service_status='Closure documented';}if(!loaded){$('reports').value=state.config.reports||'';$('screenshots').value=state.config.screenshots||'';loaded=true;}
@@ -305,7 +307,7 @@ async function openSource(id){if(window.truebeamNativeReady){const bridge=await 
 async function download(route,filename){try{const response=await api(route);const url=URL.createObjectURL(await response.blob());const a=el('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}catch(error){notice(error.message,true);}}
 $('edit-form').onsubmit=async event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.target));const result=await command('update',{id:selected.id,...data});if(result)$('detail').close();};
 $('close').onclick=()=>$('detail').close();$('merge').onclick=async()=>{const target=$('merge-target').value;if(!target)return;const result=await command('merge',{source:selected.id,target:Number(target)});if(result)$('detail').close();};
-$('folder-settings').onclick=()=>$('folder-dialog').showModal();$('close-folders').onclick=()=>$('folder-dialog').close();
+$('folder-settings').onclick=()=>$('folder-dialog').showModal();$('folder-connection').onclick=()=>$('folder-dialog').showModal();$('close-folders').onclick=()=>$('folder-dialog').close();
 $('sort-by').onchange=()=>changeSort($('sort-by').value);$('sort-direction').onclick=()=>changeSort(tableSort[kind].key,tableSort[kind].direction==='asc'?'desc':'asc');$('download-table').onclick=downloadDisplayedTable;
 $('search').oninput=render;$('review-filter').onchange=render;
 $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim()});$('pause').onclick=()=>command('pause');$('scan').onclick=()=>command('scan');$('retry').onclick=()=>command('retry');

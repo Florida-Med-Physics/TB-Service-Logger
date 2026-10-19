@@ -200,13 +200,23 @@ function csvExport(){
  return '\ufeff'+rows.map(row=>row.map(quote).join(',')).join('\r\n');
 }
 
+let folderConnection={checked:0,ok:false};
+async function browserFoldersConnected(){
+ if(Date.now()-folderConnection.checked<10000)return folderConnection.ok;
+ folderConnection={checked:Date.now(),ok:false};
+ try{for(const kind of ['reports','screenshots']){const handle=browserStore.handles[kind];if(!handle||!await permission(handle))return false;await handle.values().next();}folderConnection.ok=true;}catch{}
+ return folderConnection.ok;
+}
 async function localApi(route,body){
- if(route==='state')return new Response(JSON.stringify({records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Export Report saves both tables to Excel.'}));
+ if(route==='state')return new Response(JSON.stringify({folders_connected:await browserFoldersConnected(),records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Export Report saves both tables to Excel.'}));
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');
   const startIn=browserStore.handles[kind]||browserStore.handles.reports;
-  const handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read',...(startIn?{startIn}:{})});
+  let handle;
+  try{handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read',...(startIn?{startIn}:{})});}
+  catch(e){if(e.name==='AbortError')throw e;if(startIn){handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read',startIn:kind==='screenshots'&&browserStore.handles.reports!==startIn?browserStore.handles.reports||'documents':'documents'});}else throw e;}
+  folderConnection.checked=0;
   const other=browserStore.handles[kind==='reports'?'screenshots':'reports'];
   if(other){if(await handle.isSameEntry(other)||await handle.resolve(other)!==null||await other.resolve(handle)!==null)throw new Error('Choose separate folders that do not contain one another.');}
   browserStore.handles[kind]=handle;browserStore.config[kind]=handle.name;await dbPut('settings',handle,kind);
@@ -264,6 +274,7 @@ async function initStandalone(){
   await openLocalDatabase();
   $('reports').readOnly=true;$('screenshots').readOnly=true;
   $('reports').placeholder='U:\\QA\\SystemQA\\LINAC QA\\TrueBeam\\Service reports';$('screenshots').placeholder='W:\\Varian\\Transfer\\TDS\\H192905\\PrintScreen';
+  const help=el('p','In the local HTML, Chrome or Edge requires you to select folders once. In the picker, paste U:\\QA\\SystemQA\\LINAC QA\\TrueBeam\\Service reports for reports, or W:\\Varian\\Transfer\\TDS\\H192905\\PrintScreen for screenshots. After that, remembered folders are reused.','sub');$('folder-dialog').querySelector('.dialog-body').prepend(help);
   $('excel').textContent='Export Report';
   $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every minute.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
