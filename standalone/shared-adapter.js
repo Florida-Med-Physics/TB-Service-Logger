@@ -34,11 +34,12 @@ async function initShared(){
  const input=el('input');input.id='shared-output';input.value=state.config.output;input.style.width='calc(100% - 115px)';
  const choose=el('button','Choose…');choose.id='choose-report';choose.onclick=async()=>{try{const result=await(await api('browse',{kind:'output'})).json();if(result.path)input.value=result.path;}catch(e){notice(e.message,true);}};
  row.append(label,input,choose,el('p','All applications use these host paths. The report reads new data every minute without replacing the open workbook.','sub'));folderBody.append(row);
+ const logsRow=el('div');logsRow.style.marginTop='15px';const logsLabel=el('label','Logs folder');const logsInput=el('input');logsInput.value=state.config.logs||'';logsInput.style.width='calc(100% - 115px)';const logsChoose=el('button','Choose…');logsChoose.onclick=async()=>{try{const result=await(await api('browse',{kind:'logs'})).json();if(result.path)logsInput.value=result.path;}catch(e){notice(e.message,true);}};logsRow.append(logsLabel,logsInput,logsChoose,el('p','New timestamped Excel logs are saved when additional entries are added.','sub'));folderBody.append(logsRow);
  $('reports').value=state.config.reports;$('screenshots').value=state.config.screenshots;
- $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim(),output:input.value.trim()});
+ $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim(),output:input.value.trim(),logs:logsInput.value.trim()});
  if(!state.admin){
-  for(const node of [$('reports'),$('screenshots'),input])node.readOnly=true;
-  for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry')]){button.disabled=true;button.title='Host administrator only';}
+  for(const node of [$('reports'),$('screenshots'),input,logsInput])node.readOnly=true;
+  for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry'),logsChoose]){button.disabled=true;button.title='Host administrator only';}
  }
  $('excel').onclick=async()=>{await api('export',{});notice('Report data refresh requested. The existing workbook is preserved, including while open in Excel.');};
  setInterval(poll,2000);

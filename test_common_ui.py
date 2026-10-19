@@ -22,4 +22,22 @@ class CommonInterfaceTests(unittest.TestCase):
     with urlopen('http://127.0.0.1:'+str(server.server_port)+'/') as response:body=response.read()
     self.assertEqual(body,(ROOT/'standalone/TrueBeam-Local.html').read_bytes())
    finally:server.shutdown();server.server_close();service.close()
+ def test_timestamped_logs_only_for_additions(self):
+  with tempfile.TemporaryDirectory() as directory:
+   root=Path(directory);logs=root/'logs';logs.mkdir()
+   service=SharedService(root/'home',defaults={'reports':'','screenshots':'','output':'','running':False})
+   service.engine.config['logs']=str(logs)
+   records=[dict(id=1,kind='screenshots',sources=[],issue='Test fault')]
+   service.state=lambda:{'records':records}
+   try:
+    service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),1)
+    service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),1)
+    records.append(dict(id=2,kind='reports',sources=[],issue='Service work'))
+    service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),2)
+    from openpyxl import load_workbook
+    book=load_workbook(sorted(logs.glob('*.xlsx'))[-1])
+    self.assertEqual(book['Fault Reports'].max_row,5)
+    self.assertEqual(book['Service Reports'].max_row,5)
+    book.close()
+   finally:service.close()
 if __name__=='__main__':unittest.main()

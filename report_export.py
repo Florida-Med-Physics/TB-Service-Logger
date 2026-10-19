@@ -17,8 +17,8 @@ FAULT=[
  ('service_date','Event Date',20),('fault_code','Error Code',15),
  ('additional_codes','Additional Error Codes',18),('fault_name','Fault Name',32),
  ('severity','Severity',14),('issue','Error Details',70),
- ('suggestions','SUGGESTED SOLUTION',70),('work_performed','OUR SOLUTION',50),
- ('worker_initials','Worker Initials',16),('notes','Notes',34),('sources','Screenshot',32)]
+ ('suggestions','SUGGESTED SOLUTION',70),('work_performed','Resolution',50),
+ ('worker_initials','Worker Initials',16),('sources','Screenshot',32)]
 def date_value(value):
     if not value:return ''
     for fmt in ('%Y-%m-%dT%H:%M:%S','%Y-%m-%d','%m/%d/%Y %I:%M %p','%m/%d/%Y %H:%M','%m/%d/%Y','%d-%b-%Y %I:%M:%S %p','%d-%b-%Y %I:%M %p','%b/%d/%Y'):
@@ -33,7 +33,7 @@ def write_report(records,output):
     for kind,title,columns in [('reports','Service Reports',SERVICE),('screenshots','Fault Reports',FAULT)]:
         ws=wb.create_sheet(title);ws.sheet_view.showGridLines=False
         ws.append(['TrueBeam — '+title]);ws['A1'].font=Font(name='Arial',size=14,bold=True)
-        ws.append(['Updated '+datetime.now().strftime('%m/%d/%Y %H:%M')+'. Automatically saved every 10 minutes from the local database.'])
+        ws.append(['Updated '+datetime.now().strftime('%m/%d/%Y %H:%M')+'. Saved from the application database.'])
         ws['A2'].font=Font(name='Arial',size=9,color='595959')
         ws.append([]);ws.append([item[1] for item in columns])
         for cell in ws[4]:

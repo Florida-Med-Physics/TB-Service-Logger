@@ -72,7 +72,7 @@ async function retryImportProblems(){
 }
 function showImportDetails(){
  let dialog=$('import-details');if(!dialog){const created=intakeDialog('import-details','Import details');dialog=created.dialog;}
- const body=dialog.querySelector('.dialog-body');body.replaceChildren(el('p','Skipped or unreadable files remain available here, outside the report tables. If folder access is blocked on this computer, use Import files to select PDFs and PNGs directly.'));
+ const body=dialog.querySelector('.dialog-body');body.replaceChildren(el('p','Skipped or unreadable files remain available here, outside the report tables. If folder access is blocked on this computer, use Import Varian work orders to select work order PDFs directly. Screenshots are read from the monitored screenshot folder.'));
  const problems=browserStore.records.filter(r=>r.error),summary=el('p',browserStore.records.length+' source entries · '+problems.length+' extraction problems');body.append(summary);
  if(problems.length){const retry=el('button','Retry problem files');retry.onclick=()=>retryImportProblems().catch(e=>notice(e.message,true));body.append(retry);}
  for(const record of browserStore.records.filter(r=>r.entryType!=='manual')){
@@ -85,12 +85,11 @@ function showImportDetails(){
 }
 async function initIntake(){
  const actions=document.querySelector('.exports');
- const importButton=el('button','Import files');importButton.id='import-files';
- const input=el('input');input.type='file';input.multiple=true;input.accept='.pdf,.png,.jpg,.jpeg,.bmp,.webp,.txt,.docx';input.hidden=true;input.id='import-file-input';
- importButton.onclick=()=>input.click();input.onchange=async()=>{try{await importSelectedFiles([...input.files]);}catch(e){notice(e.message,true);}finally{input.value='';}};
- const details=el('button','Import details');details.id='import-details-button';details.onclick=showImportDetails;
+ const importButton=el('button','Import Varian work orders');importButton.id='import-files';
+ const input=el('input');input.type='file';input.multiple=true;input.accept='.pdf';input.hidden=true;input.id='import-file-input';
+ importButton.onclick=()=>input.click();input.onchange=async()=>{try{const files=[...input.files];if(files.some(file=>!file.name.toLowerCase().endsWith('.pdf')))throw new Error('Select Varian work order PDF files only.');await importSelectedFiles(files);}catch(e){notice(e.message,true);}finally{input.value='';}};
  const add=el('button','Add fault','primary');add.id='add-fault';
- actions.prepend(add,importButton,details,input);
+ actions.prepend(add,importButton,input);
  const {dialog,body}=intakeDialog('therapist-fault','Add therapist fault');
  const form=el('form');form.id='therapist-fault-form';const grid=el('div',undefined,'edit-grid');
  for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea']]){

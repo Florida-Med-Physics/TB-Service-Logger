@@ -205,7 +205,8 @@ async function localApi(route,body){
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');
-  const handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read'});
+  const startIn=browserStore.handles[kind]||browserStore.handles.reports;
+  const handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read',...(startIn?{startIn}:{})});
   const other=browserStore.handles[kind==='reports'?'screenshots':'reports'];
   if(other){if(await handle.isSameEntry(other)||await handle.resolve(other)!==null||await other.resolve(handle)!==null)throw new Error('Choose separate folders that do not contain one another.');}
   browserStore.handles[kind]=handle;browserStore.config[kind]=handle.name;await dbPut('settings',handle,kind);
@@ -262,7 +263,7 @@ async function initStandalone(){
  try{
   await openLocalDatabase();
   $('reports').readOnly=true;$('screenshots').readOnly=true;
-  $('reports').placeholder='Choose the service-report folder…';$('screenshots').placeholder='Choose the screenshot folder…';
+  $('reports').placeholder='U:\\QA\\SystemQA\\LINAC QA\\TrueBeam\\Service reports';$('screenshots').placeholder='W:\\Varian\\Transfer\\TDS\\H192905\\PrintScreen';
   $('excel').textContent='Export Report';
   $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every minute.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);

@@ -54,6 +54,7 @@ async function connectExcel(){
  }catch(e){if(e.name!=='AbortError')excelStatus(e.message,true);}
 }
 async function initExcelSync(){
+ await initLogSync();
  $('excel').onclick=async()=>{if(excelSync.handle){await syncExcel(true);}else{await connectExcel();}};
  const row=el('div');row.style.marginTop='15px';const label=el('label','Export Report');label.htmlFor='shared-output';const output=el('input');output.id='shared-output';output.readOnly=true;output.style.width='calc(100% - 115px)';const button=el('button','Choose…');button.id='choose-report';button.onclick=async()=>{await connectExcel();output.value=excelSync.handle?.name||'';};row.append(label,output,button,el('p','The HTML version saves to a file you authorize in this browser. Desktop versions use the shared report data feeds.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
 
@@ -61,4 +62,29 @@ async function initExcelSync(){
  excelSync.handle=await dbGet('settings','excel-output');
  if(excelSync.handle){output.value=excelSync.handle.name;excelStatus('Export Report remembered · '+excelSync.handle.name);const reconnect=el('button','Reconnect Export Report');reconnect.onclick=async()=>{try{await excelSync.handle.requestPermission({mode:'readwrite'});excelSync.retryAt=0;await syncExcel(true);}catch(e){excelStatus(e.message,true);}};button.after(reconnect);await syncExcel();}
  setInterval(()=>syncExcel(),2000);
+}
+
+const logSync={handle:null,busy:false,seen:new Set()};
+function logEntryKeys(records){return records.map(r=>r.kind+':'+r.id);}
+async function syncTimestampedLog(){
+ if(!logSync.handle||logSync.busy||browserStore.busy)return;
+ const records=groupedEvents(),keys=logEntryKeys(records);
+ if(!keys.some(key=>!logSync.seen.has(key)))return;
+ logSync.busy=true;
+ try{
+  if(await logSync.handle.queryPermission({mode:'readwrite'})!=='granted')throw new Error('Choose the logs folder again to grant access.');
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const file=await logSync.handle.getFileHandle('TrueBeam_Log_'+stamp+'_'+crypto.randomUUID().slice(0,8)+'.xlsx',{create:true});
+  const writer=await file.createWritable();
+  try{await writer.write(excelWorkbook(records));await writer.close();}catch(e){try{await writer.abort();}catch{}throw e;}
+  logSync.seen=new Set(keys);await dbPut('settings',keys,'log-seen');
+  notice('Timestamped Excel log saved · '+file.name);
+ }catch(e){notice('Log save pending: '+e.message,true);}finally{logSync.busy=false;}
+}
+async function initLogSync(){
+ logSync.handle=await dbGet('settings','logs-folder');logSync.seen=new Set(await dbGet('settings','log-seen')||[]);
+ const row=el('div');row.style.marginTop='15px';const label=el('label','Logs folder');const input=el('input');input.readOnly=true;input.value=logSync.handle?.name||'';input.style.width='calc(100% - 115px)';
+ const choose=el('button','Choose…');choose.onclick=async()=>{try{const startIn=logSync.handle||browserStore.handles.reports;const handle=await showDirectoryPicker({id:'truebeam-logs',mode:'readwrite',...(startIn?{startIn}:{})});const same=logSync.handle&&await logSync.handle.isSameEntry(handle);logSync.handle=handle;if(!same){logSync.seen=new Set();await dbPut('settings',[],'log-seen');}input.value=handle.name;await dbPut('settings',handle,'logs-folder');await syncTimestampedLog();}catch(e){if(e.name!=='AbortError')notice(e.message,true);}};
+ row.append(label,input,choose,el('p','A new timestamped Excel log is saved when additional faults or service reports are added. Earlier logs are preserved.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
+ await syncTimestampedLog();setInterval(syncTimestampedLog,2000);
 }

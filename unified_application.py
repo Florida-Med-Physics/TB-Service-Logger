@@ -29,9 +29,17 @@ class Bridge(QObject):
     @Slot(str,result=str)
     def pick(self,kind):
         if not self.window.api or not self.window.api.local:return json.dumps({'error':'Choose shared folders on the host computer.'})
+        from application_host import DEFAULTS
+        config=self.window.api.request('state')['config']
+        chosen=getattr(self.window,'selected_service_folder',None)
+        defaults={'reports':DEFAULTS['reports'],'screenshots':DEFAULTS['screenshots'],'logs':str(REPORT_FOLDER),'output':str(REPORT_FOLDER)}
+        remembered=config.get(kind,'')
+        candidates=[remembered,defaults.get(kind,''),chosen,config.get('reports','')]
+        start=next((str(Path(value).parent if kind=='output' and Path(value).suffix.lower()=='.xlsx' else Path(value)) for value in candidates if value and (Path(value).parent if kind=='output' and Path(value).suffix.lower()=='.xlsx' else Path(value)).is_dir()),str(Path.home()))
         if kind=='output':
-            path,_=QFileDialog.getSaveFileName(self.window,'Choose Excel report',str(REPORT_FOLDER/'TrueBeam_Service_Log.xlsx') if REPORT_FOLDER.is_dir() else 'TrueBeam_Service_Log.xlsx','Excel workbook (*.xlsx)',options=QFileDialog.DontConfirmOverwrite)
-        else:path=QFileDialog.getExistingDirectory(self.window,'Choose '+('service report' if kind=='reports' else 'screenshot')+' folder')
+            path,_=QFileDialog.getSaveFileName(self.window,'Choose Excel report',str(Path(start)/'TrueBeam_Service_Log.xlsx'),'Excel workbook (*.xlsx)',options=QFileDialog.DontConfirmOverwrite)
+        else:path=QFileDialog.getExistingDirectory(self.window,'Choose '+('service report' if kind=='reports' else 'logs' if kind=='logs' else 'screenshot')+' folder',start)
+        if path and kind=='reports':self.window.selected_service_folder=path
         return json.dumps({'path':os.path.normpath(path) if path else ''})
     @Slot(str,result=str)
     def source(self,source_id):

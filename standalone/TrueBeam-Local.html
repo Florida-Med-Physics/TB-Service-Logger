@@ -923,7 +923,8 @@ async function localApi(route,body){
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');
-  const handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read'});
+  const startIn=browserStore.handles[kind]||browserStore.handles.reports;
+  const handle=await showDirectoryPicker({id:'truebeam-'+kind,mode:'read',...(startIn?{startIn}:{})});
   const other=browserStore.handles[kind==='reports'?'screenshots':'reports'];
   if(other){if(await handle.isSameEntry(other)||await handle.resolve(other)!==null||await other.resolve(handle)!==null)throw new Error('Choose separate folders that do not contain one another.');}
   browserStore.handles[kind]=handle;browserStore.config[kind]=handle.name;await dbPut('settings',handle,kind);
@@ -980,7 +981,7 @@ async function initStandalone(){
  try{
   await openLocalDatabase();
   $('reports').readOnly=true;$('screenshots').readOnly=true;
-  $('reports').placeholder='Choose the service-report folder…';$('screenshots').placeholder='Choose the screenshot folder…';
+  $('reports').placeholder='U:\\QA\\SystemQA\\LINAC QA\\TrueBeam\\Service reports';$('screenshots').placeholder='W:\\Varian\\Transfer\\TDS\\H192905\\PrintScreen';
   $('excel').textContent='Export Report';
   $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every minute.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
@@ -1054,6 +1055,7 @@ async function connectExcel(){
  }catch(e){if(e.name!=='AbortError')excelStatus(e.message,true);}
 }
 async function initExcelSync(){
+ await initLogSync();
  $('excel').onclick=async()=>{if(excelSync.handle){await syncExcel(true);}else{await connectExcel();}};
  const row=el('div');row.style.marginTop='15px';const label=el('label','Export Report');label.htmlFor='shared-output';const output=el('input');output.id='shared-output';output.readOnly=true;output.style.width='calc(100% - 115px)';const button=el('button','Choose…');button.id='choose-report';button.onclick=async()=>{await connectExcel();output.value=excelSync.handle?.name||'';};row.append(label,output,button,el('p','The HTML version saves to a file you authorize in this browser. Desktop versions use the shared report data feeds.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
 
@@ -1061,6 +1063,31 @@ async function initExcelSync(){
  excelSync.handle=await dbGet('settings','excel-output');
  if(excelSync.handle){output.value=excelSync.handle.name;excelStatus('Export Report remembered · '+excelSync.handle.name);const reconnect=el('button','Reconnect Export Report');reconnect.onclick=async()=>{try{await excelSync.handle.requestPermission({mode:'readwrite'});excelSync.retryAt=0;await syncExcel(true);}catch(e){excelStatus(e.message,true);}};button.after(reconnect);await syncExcel();}
  setInterval(()=>syncExcel(),2000);
+}
+
+const logSync={handle:null,busy:false,seen:new Set()};
+function logEntryKeys(records){return records.map(r=>r.kind+':'+r.id);}
+async function syncTimestampedLog(){
+ if(!logSync.handle||logSync.busy||browserStore.busy)return;
+ const records=groupedEvents(),keys=logEntryKeys(records);
+ if(!keys.some(key=>!logSync.seen.has(key)))return;
+ logSync.busy=true;
+ try{
+  if(await logSync.handle.queryPermission({mode:'readwrite'})!=='granted')throw new Error('Choose the logs folder again to grant access.');
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  const file=await logSync.handle.getFileHandle('TrueBeam_Log_'+stamp+'_'+crypto.randomUUID().slice(0,8)+'.xlsx',{create:true});
+  const writer=await file.createWritable();
+  try{await writer.write(excelWorkbook(records));await writer.close();}catch(e){try{await writer.abort();}catch{}throw e;}
+  logSync.seen=new Set(keys);await dbPut('settings',keys,'log-seen');
+  notice('Timestamped Excel log saved · '+file.name);
+ }catch(e){notice('Log save pending: '+e.message,true);}finally{logSync.busy=false;}
+}
+async function initLogSync(){
+ logSync.handle=await dbGet('settings','logs-folder');logSync.seen=new Set(await dbGet('settings','log-seen')||[]);
+ const row=el('div');row.style.marginTop='15px';const label=el('label','Logs folder');const input=el('input');input.readOnly=true;input.value=logSync.handle?.name||'';input.style.width='calc(100% - 115px)';
+ const choose=el('button','Choose…');choose.onclick=async()=>{try{const startIn=logSync.handle||browserStore.handles.reports;const handle=await showDirectoryPicker({id:'truebeam-logs',mode:'readwrite',...(startIn?{startIn}:{})});const same=logSync.handle&&await logSync.handle.isSameEntry(handle);logSync.handle=handle;if(!same){logSync.seen=new Set();await dbPut('settings',[],'log-seen');}input.value=handle.name;await dbPut('settings',handle,'logs-folder');await syncTimestampedLog();}catch(e){if(e.name!=='AbortError')notice(e.message,true);}};
+ row.append(label,input,choose,el('p','A new timestamped Excel log is saved when additional faults or service reports are added. Earlier logs are preserved.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
+ await syncTimestampedLog();setInterval(syncTimestampedLog,2000);
 }
 
 async function readImageCanvas(file){
@@ -1137,7 +1164,7 @@ async function retryImportProblems(){
 }
 function showImportDetails(){
  let dialog=$('import-details');if(!dialog){const created=intakeDialog('import-details','Import details');dialog=created.dialog;}
- const body=dialog.querySelector('.dialog-body');body.replaceChildren(el('p','Skipped or unreadable files remain available here, outside the report tables. If folder access is blocked on this computer, use Import files to select PDFs and PNGs directly.'));
+ const body=dialog.querySelector('.dialog-body');body.replaceChildren(el('p','Skipped or unreadable files remain available here, outside the report tables. If folder access is blocked on this computer, use Import Varian work orders to select work order PDFs directly. Screenshots are read from the monitored screenshot folder.'));
  const problems=browserStore.records.filter(r=>r.error),summary=el('p',browserStore.records.length+' source entries · '+problems.length+' extraction problems');body.append(summary);
  if(problems.length){const retry=el('button','Retry problem files');retry.onclick=()=>retryImportProblems().catch(e=>notice(e.message,true));body.append(retry);}
  for(const record of browserStore.records.filter(r=>r.entryType!=='manual')){
@@ -1150,12 +1177,11 @@ function showImportDetails(){
 }
 async function initIntake(){
  const actions=document.querySelector('.exports');
- const importButton=el('button','Import files');importButton.id='import-files';
- const input=el('input');input.type='file';input.multiple=true;input.accept='.pdf,.png,.jpg,.jpeg,.bmp,.webp,.txt,.docx';input.hidden=true;input.id='import-file-input';
- importButton.onclick=()=>input.click();input.onchange=async()=>{try{await importSelectedFiles([...input.files]);}catch(e){notice(e.message,true);}finally{input.value='';}};
- const details=el('button','Import details');details.id='import-details-button';details.onclick=showImportDetails;
+ const importButton=el('button','Import Varian work orders');importButton.id='import-files';
+ const input=el('input');input.type='file';input.multiple=true;input.accept='.pdf';input.hidden=true;input.id='import-file-input';
+ importButton.onclick=()=>input.click();input.onchange=async()=>{try{const files=[...input.files];if(files.some(file=>!file.name.toLowerCase().endsWith('.pdf')))throw new Error('Select Varian work order PDF files only.');await importSelectedFiles(files);}catch(e){notice(e.message,true);}finally{input.value='';}};
  const add=el('button','Add fault','primary');add.id='add-fault';
- actions.prepend(add,importButton,details,input);
+ actions.prepend(add,importButton,input);
  const {dialog,body}=intakeDialog('therapist-fault','Add therapist fault');
  const form=el('form');form.id='therapist-fault-form';const grid=el('div',undefined,'edit-grid');
  for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea']]){
@@ -1208,11 +1234,12 @@ async function initShared(){
  const input=el('input');input.id='shared-output';input.value=state.config.output;input.style.width='calc(100% - 115px)';
  const choose=el('button','Choose…');choose.id='choose-report';choose.onclick=async()=>{try{const result=await(await api('browse',{kind:'output'})).json();if(result.path)input.value=result.path;}catch(e){notice(e.message,true);}};
  row.append(label,input,choose,el('p','All applications use these host paths. The report reads new data every minute without replacing the open workbook.','sub'));folderBody.append(row);
+ const logsRow=el('div');logsRow.style.marginTop='15px';const logsLabel=el('label','Logs folder');const logsInput=el('input');logsInput.value=state.config.logs||'';logsInput.style.width='calc(100% - 115px)';const logsChoose=el('button','Choose…');logsChoose.onclick=async()=>{try{const result=await(await api('browse',{kind:'logs'})).json();if(result.path)logsInput.value=result.path;}catch(e){notice(e.message,true);}};logsRow.append(logsLabel,logsInput,logsChoose,el('p','New timestamped Excel logs are saved when additional entries are added.','sub'));folderBody.append(logsRow);
  $('reports').value=state.config.reports;$('screenshots').value=state.config.screenshots;
- $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim(),output:input.value.trim()});
+ $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim(),output:input.value.trim(),logs:logsInput.value.trim()});
  if(!state.admin){
-  for(const node of [$('reports'),$('screenshots'),input])node.readOnly=true;
-  for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry')]){button.disabled=true;button.title='Host administrator only';}
+  for(const node of [$('reports'),$('screenshots'),input,logsInput])node.readOnly=true;
+  for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry'),logsChoose]){button.disabled=true;button.title='Host administrator only';}
  }
  $('excel').onclick=async()=>{await api('export',{});notice('Report data refresh requested. The existing workbook is preserved, including while open in Excel.');};
  setInterval(poll,2000);

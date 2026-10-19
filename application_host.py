@@ -157,12 +157,31 @@ class SharedService:
         finally:e.db.close()
     def configure(self,payload):
         with self.scan_lock:
+            logs=str(payload.get('logs',self.engine.config.get('logs',''))).strip()
+            if logs and not Path(logs).is_dir():raise ValueError('Choose an existing logs folder.')
             self.engine.configure(payload,reuse_existing=True)
+            self.engine.config['logs']=logs
             self.engine.config['running']=bool(payload.get('running',True))
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
             self.last_scan=-5;self.next_report=0
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
+    def save_addition_log(self):
+        folder=self.engine.config.get('logs','')
+        if not folder:return
+        records=self.state()['records']
+        keys={r['kind']+':'+str(r['id']) for r in records}
+        ledger=self.home/'timestamped-log-entries.json'
+        saved=json.loads(ledger.read_text()) if ledger.exists() else {}
+        seen=set(saved.get(str(folder),[]))
+        if not keys-seen:return
+        from datetime import datetime
+        from report_export import write_report
+        output=Path(folder)/('TrueBeam_Log_'+datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')+'_'+uuid.uuid4().hex[:8]+'.xlsx')
+        write_report(records,output)
+        saved[str(folder)]=sorted(keys)
+        temporary=ledger.with_suffix('.tmp');temporary.write_text(json.dumps(saved));temporary.replace(ledger)
+
     def tick(self):
         if self.engine.config.get('running') and self.clock()-self.last_scan>=5:
             with self.scan_lock:
@@ -177,6 +196,7 @@ class SharedService:
                     if self.engine.dirty:self.mirror();self.engine.dirty=False
                     self.snapshot.update(message=self.engine.message or 'Host folders checked.')
                 finally:self.snapshot.update(busy=False,last_scan=time.strftime('%Y-%m-%d %H:%M:%S'));self.last_scan=self.clock()
+        self.save_addition_log()
         if self.engine.config.get('output') and self.clock()>=self.next_report:
             try:
                 publish_report(self.state()['records'],Path(self.engine.config['output']))
