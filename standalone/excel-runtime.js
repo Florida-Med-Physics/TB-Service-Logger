@@ -1,5 +1,4 @@
 /* Offline XLSX writer: standard Open XML in an uncompressed ZIP. */
-const excelSync={handle:null,signature:null,busy:false,retryAt:0,lastSaved:0};
 const xmlText=v=>String(v??'').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function zipWorkbook(entries){
  const encoder=new TextEncoder(),chunks=[],directory=[];let offset=0;
@@ -32,59 +31,34 @@ function excelWorkbook(records){
  ['xl/worksheets/sheet2.xml',sheet('Fault Reports',['Event Date','Error Code','Additional Codes','Fault Name','Severity','Error Details','SUGGESTED SOLUTION','Resolution','Worker Initials','Source Screenshots'],[20,15,18,32,14,70,70,50,16,32],faults)]
  ]);
 }
-function excelStatus(message,error=false){const node=$('excel-status');if(node){node.textContent=message;node.style.color=error?'#b23b31':'';}}
-async function syncExcel(force=false){
- if(!excelSync.handle||excelSync.busy||(!force&&Date.now()<excelSync.retryAt))return;
- const records=groupedEvents(),signature=JSON.stringify(records);if(!force&&signature===excelSync.signature&&Date.now()-excelSync.lastSaved<60000)return;
- excelSync.busy=true;
- try{
-  if(await excelSync.handle.queryPermission({mode:'readwrite'})!=='granted')throw new Error('Reconnect Excel file to grant write access.');
-  const blob=excelWorkbook(records),writer=await excelSync.handle.createWritable();
-  try{await writer.write(blob);await writer.close();}catch(e){try{await writer.abort();}catch{}throw e;}
-  excelSync.signature=signature;excelSync.lastSaved=Date.now();excelSync.retryAt=0;excelStatus('Export Report saved · '+excelSync.handle.name+' · '+new Date().toLocaleTimeString());
- }catch(e){excelSync.retryAt=Date.now()+10000;excelStatus('Export Report not saved: '+e.message+' Close the workbook in Excel if it is locked; changes remain in the database.',true);}
- finally{excelSync.busy=false;}
-}
-async function connectExcel(){
- try{
-  if(!window.showSaveFilePicker)throw new Error('Use desktop Edge or Chrome to connect an Excel file.');
-  const handle=await showSaveFilePicker({suggestedName:'TrueBeam_Service_Log.xlsx',types:[{description:'Excel workbook',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});
-  if(excelSync.busy)throw new Error('A save is in progress. Try again in a moment.');
-  excelSync.handle=handle;excelSync.signature=null;await dbPut('settings',handle,'excel-output');await syncExcel(true);
- }catch(e){if(e.name!=='AbortError')excelStatus(e.message,true);}
-}
 async function initExcelSync(){
  await initLogSync();
- $('excel').onclick=async()=>{if(excelSync.handle){await syncExcel(true);}else{await connectExcel();}};
- const row=el('div');row.style.marginTop='15px';const label=el('label','Export Report');label.htmlFor='shared-output';const output=el('input');output.id='shared-output';output.readOnly=true;output.style.width='calc(100% - 115px)';const button=el('button','Choose…');button.id='choose-report';button.onclick=async()=>{await connectExcel();output.value=excelSync.handle?.name||'';};row.append(label,output,button,el('p','The HTML version saves to a file you authorize in this browser. Desktop versions use the shared report data feeds.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
-
- const status=el('span','Export Report not connected · choose an output file in Folder settings');status.id='excel-status';status.setAttribute('role','status');document.querySelector('.monitor-bar').append(status);
- excelSync.handle=await dbGet('settings','excel-output');
- if(excelSync.handle){output.value=excelSync.handle.name;excelStatus('Export Report remembered · '+excelSync.handle.name);const reconnect=el('button','Reconnect Export Report');reconnect.onclick=async()=>{try{await excelSync.handle.requestPermission({mode:'readwrite'});excelSync.retryAt=0;await syncExcel(true);}catch(e){excelStatus(e.message,true);}};button.after(reconnect);await syncExcel();}
- setInterval(()=>syncExcel(),2000);
+ $('excel').onclick=async()=>{if(!logSync.handle){$('folder-dialog').showModal();notice('Choose a Logs folder to save new timestamped Excel logs.');return;}await syncTimestampedLog(true);};
 }
 
-const logSync={handle:null,busy:false,seen:new Set()};
-function logEntryKeys(records){return records.map(r=>r.kind+':'+r.id);}
-async function syncTimestampedLog(){
+const logSync={handle:null,busy:false,signature:null};
+function logSignature(records){return JSON.stringify(records.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))));}
+async function syncTimestampedLog(force=false){
  if(!logSync.handle||logSync.busy||browserStore.busy)return;
- const records=groupedEvents(),keys=logEntryKeys(records);
- if(!keys.some(key=>!logSync.seen.has(key)))return;
+ const records=groupedEvents(),signature=logSignature(records);
+ if(!force&&(signature===logSync.signature||(!records.length&&logSync.signature===null)))return;
  logSync.busy=true;
  try{
   if(await logSync.handle.queryPermission({mode:'readwrite'})!=='granted')throw new Error('Choose the logs folder again to grant access.');
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
-  const file=await logSync.handle.getFileHandle('TrueBeam_Log_'+stamp+'_'+crypto.randomUUID().slice(0,8)+'.xlsx',{create:true});
+  const name='TrueBeam_Log_'+stamp+'_'+crypto.randomUUID()+'.xlsx';
+  try{await logSync.handle.getFileHandle(name);throw new Error('Log filename already exists; retrying with a new filename.');}catch(e){if(e.name!=='NotFoundError')throw e;}
+  const file=await logSync.handle.getFileHandle(name,{create:true});
   const writer=await file.createWritable();
   try{await writer.write(excelWorkbook(records));await writer.close();}catch(e){try{await writer.abort();}catch{}throw e;}
-  logSync.seen=new Set(keys);await dbPut('settings',keys,'log-seen');
+  logSync.signature=signature;await dbPut('settings',signature,'log-signature');
   notice('Timestamped Excel log saved · '+file.name);
  }catch(e){notice('Log save pending: '+e.message,true);}finally{logSync.busy=false;}
 }
 async function initLogSync(){
- logSync.handle=await dbGet('settings','logs-folder');logSync.seen=new Set(await dbGet('settings','log-seen')||[]);
+ logSync.handle=await dbGet('settings','logs-folder');logSync.signature=await dbGet('settings','log-signature')||null;
  const row=el('div');row.style.marginTop='15px';const label=el('label','Logs folder');const input=el('input');input.readOnly=true;input.value=logSync.handle?.name||'';input.style.width='calc(100% - 115px)';
- const choose=el('button','Choose…');choose.onclick=async()=>{try{const startIn=logSync.handle||browserStore.handles.reports;const handle=await showDirectoryPicker({id:'truebeam-logs',mode:'readwrite',...(startIn?{startIn}:{})});const same=logSync.handle&&await logSync.handle.isSameEntry(handle);logSync.handle=handle;if(!same){logSync.seen=new Set();await dbPut('settings',[],'log-seen');}input.value=handle.name;await dbPut('settings',handle,'logs-folder');await syncTimestampedLog();}catch(e){if(e.name!=='AbortError')notice(e.message,true);}};
- row.append(label,input,choose,el('p','A new timestamped Excel log is saved when additional faults or service reports are added. Earlier logs are preserved.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
+ const choose=el('button','Choose…');choose.onclick=async()=>{try{const startIn=logSync.handle||browserStore.handles.reports;const handle=await showDirectoryPicker({id:'truebeam-logs',mode:'readwrite',...(startIn?{startIn}:{})});const same=logSync.handle&&await logSync.handle.isSameEntry(handle);logSync.handle=handle;if(!same){logSync.signature=null;await dbPut('settings',null,'log-signature');}input.value=handle.name;await dbPut('settings',handle,'logs-folder');await syncTimestampedLog();}catch(e){if(e.name!=='AbortError')notice(e.message,true);}};
+ row.append(label,input,choose,el('p','A new timestamped Excel log is saved whenever fault or service report data changes. Earlier logs are preserved.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
  await syncTimestampedLog();setInterval(syncTimestampedLog,2000);
 }

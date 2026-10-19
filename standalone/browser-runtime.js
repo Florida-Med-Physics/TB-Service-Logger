@@ -208,7 +208,7 @@ async function browserFoldersConnected(){
  return folderConnection.ok;
 }
 async function localApi(route,body){
- if(route==='state')return new Response(JSON.stringify({folders_connected:await browserFoldersConnected(),records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Export Report saves both tables to Excel.'}));
+ if(route==='state')return new Response(JSON.stringify({folders_connected:await browserFoldersConnected(),records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Logs folder saves new timestamped Excel files when data changes.'}));
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');
@@ -276,7 +276,7 @@ async function initStandalone(){
   $('reports').placeholder='U:\\QA\\SystemQA\\LINAC QA\\TrueBeam\\Service reports';$('screenshots').placeholder='W:\\Varian\\Transfer\\TDS\\H192905\\PrintScreen';
   const help=el('p','In the local HTML, Chrome or Edge requires you to select folders once. In the picker, paste U:\\QA\\SystemQA\\LINAC QA\\TrueBeam\\Service reports for reports, or W:\\Varian\\Transfer\\TDS\\H192905\\PrintScreen for screenshots. After that, remembered folders are reused.','sub');$('folder-dialog').querySelector('.dialog-body').prepend(help);
   $('excel').textContent='Export Report';
-  $('database-path').textContent='Database stored in this browser. The connected Export Report re-saves every minute.';
+  $('database-path').textContent='Database stored in this browser. New Excel logs are saved to the Logs folder whenever report data changes.';
   if(!window.showDirectoryPicker)notice('Folder monitoring requires a current desktop Microsoft Edge or Google Chrome browser.',true);
   await poll();await initIntake();await initExcelSync();setInterval(poll,2000);
  }catch(e){notice('Browser database unavailable: '+(e.message||e)+'. Open the file in a regular Edge or Chrome window with browser storage enabled.',true);}

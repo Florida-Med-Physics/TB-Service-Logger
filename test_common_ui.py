@@ -34,6 +34,9 @@ class CommonInterfaceTests(unittest.TestCase):
     service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),1)
     records.append(dict(id=2,kind='reports',sources=[],issue='Service work'))
     service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),2)
+    records[0]['work_performed']='Updated resolution'
+    service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),3)
+    service.save_addition_log();self.assertEqual(len(list(logs.glob('*.xlsx'))),3)
     from openpyxl import load_workbook
     book=load_workbook(sorted(logs.glob('*.xlsx'))[-1])
     self.assertEqual(book['Fault Reports'].max_row,5)

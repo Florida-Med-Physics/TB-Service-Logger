@@ -5,7 +5,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from core import Engine, FIELDS, SUPPORTED, extract, parse
-from live_report import publish_report
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent))
 DEFAULTS={
@@ -159,27 +158,30 @@ class SharedService:
         with self.scan_lock:
             logs=str(payload.get('logs',self.engine.config.get('logs',''))).strip()
             if logs and not Path(logs).is_dir():raise ValueError('Choose an existing logs folder.')
-            self.engine.configure(payload,reuse_existing=True)
+            self.engine.configure(dict(payload,output=payload.get('output') or self.engine.config.get('output') or str(self.home/'unused-report.xlsx')),reuse_existing=True)
             self.engine.config['logs']=logs
             self.engine.config['running']=bool(payload.get('running',True))
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
             self.last_scan=-5;self.next_report=0
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
-    def save_addition_log(self):
+    def save_addition_log(self,force=False):
         folder=self.engine.config.get('logs','')
-        if not folder:return
+        if not folder:
+            if force:raise ValueError('Choose a Logs folder in Folder settings.')
+            return
         records=self.state()['records']
-        keys={r['kind']+':'+str(r['id']) for r in records}
+        signature=hashlib.sha256(json.dumps(sorted(records,key=lambda r:str(r['id'])),sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         ledger=self.home/'timestamped-log-entries.json'
         saved=json.loads(ledger.read_text()) if ledger.exists() else {}
-        seen=set(saved.get(str(folder),[]))
-        if not keys-seen:return
+        previous=saved.get(str(folder))
+        if not force and (previous==signature or (not records and previous is None)):return
         from datetime import datetime
         from report_export import write_report
         output=Path(folder)/('TrueBeam_Log_'+datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')+'_'+uuid.uuid4().hex[:8]+'.xlsx')
-        write_report(records,output)
-        saved[str(folder)]=sorted(keys)
+        write_report(records,output,overwrite=False)
+        saved[str(folder)]=signature
+        self.last_report=time.strftime('%Y-%m-%d %H:%M:%S')
         temporary=ledger.with_suffix('.tmp');temporary.write_text(json.dumps(saved));temporary.replace(ledger)
 
     def tick(self):
@@ -197,13 +199,6 @@ class SharedService:
                     self.snapshot.update(message=self.engine.message or 'Host folders checked.')
                 finally:self.snapshot.update(busy=False,last_scan=time.strftime('%Y-%m-%d %H:%M:%S'));self.last_scan=self.clock()
         self.save_addition_log()
-        if self.engine.config.get('output') and self.clock()>=self.next_report:
-            try:
-                publish_report(self.state()['records'],Path(self.engine.config['output']))
-                self.last_report=time.strftime('%Y-%m-%d %H:%M:%S')
-                self.snapshot.update(message='Report data published '+self.last_report+'. Open Excel workbooks are not replaced.')
-                self.next_report=self.clock()+60
-            except Exception as e:self.snapshot.update(message='Report data pending: '+str(e)+'. App edits are saved.');self.next_report=self.clock()+10
     def worker(self):
         while not self.stop.wait(.25):
             try:self.tick()
@@ -302,7 +297,9 @@ class Handler(BaseHTTPRequestHandler):
                 if route=='retry':
                     with s.connection() as db:db.execute("UPDATE records SET extractor_version='' WHERE error<>''");db.commit()
                 s.last_scan=-5;result={'ok':True}
-            elif route=='export':s.next_report=0;result={'ok':True}
+            elif route=='export':
+                with s.scan_lock:s.save_addition_log(force=True)
+                result={'ok':True}
             else:return self.respond(404,{'error':'Unknown action.'})
             return self.respond(200,result)
         except Conflict as e:return self.respond(409,{'error':str(e)})

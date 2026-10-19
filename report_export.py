@@ -27,7 +27,7 @@ def date_value(value):
     try:return datetime.fromisoformat(value).replace(tzinfo=None)
     except ValueError:return value
 
-def write_report(records,output):
+def write_report(records,output,*,overwrite=True):
     output=Path(output)
     wb=Workbook();wb.remove(wb.active)
     for kind,title,columns in [('reports','Service Reports',SERVICE),('screenshots','Fault Reports',FAULT)]:
@@ -73,6 +73,9 @@ def write_report(records,output):
     fd,tmp=tempfile.mkstemp(suffix='.xlsx',dir=output.parent);os.close(fd)
     try:
         wb.save(tmp)
-        os.replace(tmp,output)
+        if overwrite:os.replace(tmp,output)
+        else:
+            import shutil
+            with open(tmp,'rb') as source,open(output,'xb') as target:shutil.copyfileobj(source,target)
     finally:
         if os.path.exists(tmp):os.unlink(tmp)

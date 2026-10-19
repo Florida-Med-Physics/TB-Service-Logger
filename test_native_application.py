@@ -87,10 +87,9 @@ class NativeTests(unittest.TestCase):
     def test_export_to_live_report_path_preserves_existing_workbook(self):
         self.add(fault_code='420219');self.refresh()
         configured=self.root/'Report.xlsx'
-        wait_for(lambda:configured.exists())
+        create_live_workbook(self.api.request('state')['records'],configured,[],live=False)
         before=configured.read_bytes()
-        with patch('native_application.QFileDialog.getSaveFileName',return_value=(str(configured),'Excel')):
-            self.window.export_report();wait_for(lambda:not self.window.pending)
+        self.add(work_performed='Updated resolution');self.refresh()
         self.assertEqual(configured.read_bytes(),before)
     def test_export_snapshot_has_no_external_feed_dependency(self):
         self.add(fault_code='420219');records=self.api.request('state')['records']

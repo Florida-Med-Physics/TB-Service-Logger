@@ -37,7 +37,7 @@ class SharedTests(unittest.TestCase):
   db.close()
   self.assertEqual(json.loads((self.root/'network'/'settings.json').read_text())['reports'],self.defaults['reports'])
  def test_report_publication_never_writes_open_workbook(self):
-  self.fault();self.service.tick();output=Path(self.defaults['output']);before=output.read_bytes();stamp=output.stat().st_mtime_ns
+  self.fault();output=Path(self.defaults['output']);publish_report(self.service.state()['records'],output);before=output.read_bytes();stamp=output.stat().st_mtime_ns
   rid=self.service.state()['records'][0]['id'];self.service.update({'id':rid,'field':'work_performed','value':'New fix','expected':''})
   with open(output,'rb') as held:
    publish_report(self.service.state()['records'],output)
@@ -46,7 +46,7 @@ class SharedTests(unittest.TestCase):
   feed=output.parent/(output.stem+'_data')/'FaultReports.csv'
   self.assertIn('New fix',feed.read_text(encoding='utf-8-sig'))
  def test_reuse_existing_report_after_restart_and_different_saved_path(self):
-  self.fault();self.service.tick();output=Path(self.defaults['output'])
+  self.fault();output=Path(self.defaults['output']);publish_report(self.service.state()['records'],output)
   before=output.read_bytes();stamp=output.stat().st_mtime_ns
   # A different profile/previous setting must not reject the existing shared report.
   self.service.engine.config['output']=str(self.root/'old-report.xlsx')
@@ -90,7 +90,7 @@ class SharedTests(unittest.TestCase):
   fault=next(r for r in state['records'] if r['kind']=='screenshots')
   self.assertEqual(fault['service_date'],'2026-10-02T08:37:27')
   self.assertEqual(len(self.service.engine.rows()),4)
-  self.service.tick()
+  publish_report(self.service.state()['records'],Path(self.defaults['output']))
   feed=self.root/'network'/'Report_data'/'ServiceReports.csv'
   self.assertNotIn('PPG-HT-G',feed.read_text(encoding='utf-8-sig'))
   self.assertIn('WO-004612326',feed.read_text(encoding='utf-8-sig'))
