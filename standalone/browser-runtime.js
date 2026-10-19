@@ -1,6 +1,6 @@
 /* Browser-only local database, folder access, extraction and export. */
 const LOCAL_FIELDS=['service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type','worker_initials'];
-const browserStore={db:null,handles:{reports:null,screenshots:null},config:{reports:'',screenshots:'',running:false},busy:false,message:'Choose the two folders to begin.',last_scan:null,job:null,seen:new Map(),timer:null,worker:null,pdf:null,records:[]};
+const browserStore={db:null,handles:{reports:null,screenshots:null},config:{reports:'',screenshots:'',running:false},busy:false,message:'Open Folder settings to connect service report, screenshot, and Logs folders.',last_scan:null,job:null,seen:new Map(),timer:null,worker:null,pdf:null,records:[]};
 const supported=/\.(pdf|docx|txt|png|jpe?g|bmp|webp)$/i;
 function binaryAsset(name){return Uint8Array.from(atob(EMBEDDED[name]),c=>c.charCodeAt(0));}
 function scriptBlob(name){return URL.createObjectURL(new Blob([binaryAsset(name)],{type:'text/javascript'}));}
@@ -185,7 +185,7 @@ async function scanFolders(){
    }catch(e){warnings.push(source.path+': '+(e.message||e));}
   }}catch(e){warnings.push(directory.name+': '+(e.message||e));}
  }}
- finally{browserStore.busy=false;browserStore.last_scan=new Date().toLocaleString();browserStore.message=warnings.join(' ')||(browserStore.records.some(r=>r.error)?'Some files need attention. Open Import details for the exact errors.':browserStore.stopRequested?'Monitoring paused.':'Folders checked. Entries are saved in this browser.');}
+ finally{browserStore.busy=false;browserStore.last_scan=new Date().toLocaleString();browserStore.message=warnings.join(' ')||(browserStore.records.some(r=>r.error)?'Some files need attention. Open Import details for the exact errors.':browserStore.stopRequested?'Monitoring paused.':'Monitoring established folders. New timestamped logs are saved when report data changes.');}
 }
 function scheduleAction(action,payload,operation){
  const id=crypto.randomUUID();
@@ -242,7 +242,7 @@ async function localApi(route,body){
  if(route==='excel')return new Response(csvExport(),{headers:{'Content-Type':'text/csv;charset=utf-8'}});
  if(route==='configure'){
   for(const key of ['reports','screenshots'])if(!await permission(browserStore.handles[key],true))throw new Error('Use Browse to grant read access to the '+key+' folder.');
-  browserStore.config.running=true;browserStore.stopRequested=false;browserStore.seen.clear();browserStore.message='Monitoring selected folders every five seconds while this page remains open.';
+  browserStore.config.running=true;browserStore.stopRequested=false;browserStore.seen.clear();browserStore.message='Monitoring established folders. New timestamped logs are saved when report data changes.';
   if(!browserStore.timer)browserStore.timer=setInterval(()=>{if(browserStore.config.running)scanFolders().catch(e=>browserStore.message=e.message);},5000);
   return new Response(JSON.stringify(scheduleAction(route,body,async()=>{await scanFolders();await new Promise(resolve=>setTimeout(resolve,2200));await scanFolders();})));
  }

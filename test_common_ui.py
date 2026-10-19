@@ -22,6 +22,18 @@ class CommonInterfaceTests(unittest.TestCase):
     with urlopen('http://127.0.0.1:'+str(server.server_port)+'/') as response:body=response.read()
     self.assertEqual(body,(ROOT/'standalone/TrueBeam-Local.html').read_bytes())
    finally:server.shutdown();server.server_close();service.close()
+ def test_monitoring_status_does_not_prompt_for_excel_output(self):
+  with tempfile.TemporaryDirectory() as directory:
+   root=Path(directory);reports=root/'reports';screens=root/'screens';reports.mkdir();screens.mkdir()
+   service=SharedService(root/'home',defaults={'reports':str(reports),'screenshots':str(screens),'output':'','running':True})
+   try:
+    service.engine.message='Choose two folders and an Excel output file to begin.'
+    service.tick()
+    state=service.state()
+    self.assertTrue(state['folders_connected'])
+    self.assertIn('Monitoring established folders',state['message'])
+    self.assertNotIn('Excel output file',state['message'])
+   finally:service.close()
  def test_timestamped_logs_only_for_additions(self):
   with tempfile.TemporaryDirectory() as directory:
    root=Path(directory);logs=root/'logs';logs.mkdir()

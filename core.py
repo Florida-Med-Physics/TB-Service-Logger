@@ -111,7 +111,7 @@ class Engine:
         self.config_path = self.home / 'settings.json'
         self.config = json.loads(self.config_path.read_text()) if self.config_path.exists() else {'screenshots':'','reports':'','output':str(self.home / 'TrueBeam Service Log.xlsx'),'running':False}
         self.seen = {}
-        self.message = 'Choose two folders and an Excel output file to begin.'
+        self.message = 'Monitoring established service report and screenshot folders.' if self.config.get('running') else 'Open Folder settings to connect service report, screenshot, and Logs folders.'
         self.dirty = True
 
     def configure(self, values, *, reuse_existing=False):
@@ -192,6 +192,7 @@ class Engine:
         self.dirty = True
 
     def scan(self, auto_export=True):
+        if not auto_export:self.message = 'Monitoring established folders. New timestamped logs are saved when report data changes.'
         if not self.config.get('running'):
             return
         warnings = []
