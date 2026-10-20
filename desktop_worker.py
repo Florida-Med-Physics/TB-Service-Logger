@@ -60,11 +60,12 @@ class DesktopWorker:
     def tick(self):
         now=self.clock()
         if self.engine.config.get('running') and now>=self.next_scan:
-            self.events.put(dict(type='progress',message='Scanning folders…'))
             self.engine.scan(auto_export=False)
             self.next_scan=self.clock()+SCAN_SECONDS
             errors=sum(bool(r['error']) for r in self.engine.rows())
-            self.snapshot(str(len(self.engine.rows()))+' source files saved'+(' · '+str(errors)+' import warnings. Open Import details to inspect.' if errors else '.'))
+            # Folder warnings from the scan replace the steady connected status.
+            status='Connected · Actively monitoring' if self.engine.message.startswith('Monitoring established') else self.engine.message
+            self.snapshot(status+' · '+str(len(self.engine.rows()))+' source files saved'+(' · '+str(errors)+' import warnings. Open Import details to inspect.' if errors else '.'))
         output_ready=bool(self.engine.config.get('reports') and self.engine.config.get('screenshots'))
         if output_ready and self.next_save is not None and self.clock()>=self.next_save and self.clock()>=self.next_retry:
             self.save_report()

@@ -35,6 +35,6 @@ injection='<script type="application/json" id="embedded-assets">'+json.dumps(emb
 page=page.replace(marker,injection+marker,1)
 license_match=re.search(r'<details[^>]*>.*?<summary>Included open-source software</summary>.*?</details>',previous,re.S)
 if license_match:page=page.replace('</main>',license_match.group(0)+'</main>',1)
-output.write_text(page,encoding='utf-8')
+output.write_text(page,encoding='utf-8',newline='\n')
 (root/'standalone'/'ui-manifest.json').write_text(json.dumps({'ui_sha256':ui_hash,'html_sha256':hashlib.sha256(page.encode()).hexdigest(),'source':'index.html'},indent=2))
 print('Built one shared HTML interface:',output.stat().st_size,'bytes; UI SHA256',ui_hash)

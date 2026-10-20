@@ -286,7 +286,9 @@ for(const record of visible){
 
 $('results').textContent=visible.length+' of '+all.filter(r=>r.kind===kind).length+' entries';$('empty').hidden=visible.length>0;$('empty').querySelector('h3').textContent=query||filter?'No matching entries':kind==='reports'?'No service reports yet':'No fault reports yet';
 $('last-scan').textContent=state.last_scan?'Last scan: '+state.last_scan:'No scan completed yet';$('database-path').textContent='Database: '+state.database;
-$('dot').className='dot'+(state.busy?' busy':state.config.running?' active':'');$('monitor-status').textContent=(state.busy?'Scanning · ':state.config.running?'Monitoring · ':'Paused · ')+state.message;
+// Routine scans stay silent; only folder problems or warnings replace the steady status.
+const routine=/^(Monitoring established|Host folders checked|Excel updated)/.test(state.message||'');
+$('dot').className='dot'+(state.config.running?' active':'');$('monitor-status').textContent=!state.config.running?'Paused · '+state.message:state.folders_connected&&routine?'Connected · Actively monitoring':'Monitoring · '+state.message;
 const log=state.last_log;const logLine=$('log-status');logLine.textContent=(state.config.running?'Monitoring · ':'Paused · ')+(log?'Last timestamped log saved: '+log.path+' at '+new Date(log.saved_at).toLocaleString():'Last timestamped log saved: none yet');
 $('folder-connection').textContent=state.folders_connected?'Connection Established':'Connect folders';$('folder-connection').classList.toggle('connected',Boolean(state.folders_connected));
 $('start').textContent=state.config.running?'Save folders & monitor':'Start monitoring';

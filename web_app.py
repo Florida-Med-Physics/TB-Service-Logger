@@ -16,16 +16,14 @@ class Service:
         self.queue=queue.Queue()
         self.stop=threading.Event()
         self.snapshot={'busy':False,'message':('Folders saved. Start monitoring to resume.' if self.engine.config.get('reports') else 'Choose the service-report and screenshot folders to begin.'),'config':dict(self.engine.config),'last_scan':None,'job':None}
-        self.engine.progress=self.progress
         self.thread=threading.Thread(target=self.worker,daemon=True)
-    def progress(self,path):
-        self.snapshot=dict(self.snapshot,message='Checking '+path.name)
     def publish(self,**changes):
         self.snapshot=dict(self.snapshot,**changes)
     def state(self):
         with self.read_lock:
             rows=self.reader.events()
-        return dict(self.snapshot,records=rows,fields=FIELDS,database=str(self.engine.home/'service-log.sqlite3'))
+        connected=all(self.engine.config.get(k) and os.path.isdir(self.engine.config[k]) and os.access(self.engine.config[k],os.R_OK) for k in ('reports','screenshots'))
+        return dict(self.snapshot,folders_connected=connected,records=rows,fields=FIELDS,database=str(self.engine.home/'service-log.sqlite3'))
     def submit(self,action,payload):
         job=secrets.token_hex(6)
         self.queue.put((job,action,payload))
@@ -67,7 +65,7 @@ class Service:
                 running=self.engine.config.get('running',False)
                 once=getattr(self,'scan_passes',0)>0
                 if (running or once) and time.monotonic()>=next_scan:
-                    self.publish(busy=True,message='Checking folders…')
+                    self.publish(busy=True)
                     self.engine.config['running']=True
                     try:self.engine.scan()
                     finally:self.engine.config['running']=running;self.scan_passes=max(0,getattr(self,'scan_passes',0)-1)
