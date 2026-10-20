@@ -33,13 +33,15 @@ function excelWorkbook(records){
 }
 async function initExcelSync(){
  await initLogSync();
- $('excel').onclick=async()=>{if(!logSync.handle){$('folder-dialog').showModal();notice('Choose a Logs folder to save new timestamped Excel logs.');return;}await syncTimestampedLog(true);};
+ $('excel').onclick=async()=>{if(!logSync.handle){$('folder-dialog').showModal();notice('Choose a Logs folder to save new timestamped Excel logs.');return;}try{if(await logSync.handle.requestPermission({mode:'readwrite'})!=='granted')throw new Error('Allow write access to the Logs folder, then export again.');await syncTimestampedLog(true);}catch(e){notice('Export Report failed: '+e.message,true);}};
 }
 
-const logSync={handle:null,busy:false,signature:null};
+const logSync={handle:null,busy:false,signature:null,last:null};
 function logSignature(records){return JSON.stringify(records.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id))));}
-async function syncTimestampedLog(force=false){
- if(!logSync.handle||logSync.busy||browserStore.busy)return;
+async function syncTimestampedLog(force=false,allowDuringScan=false){
+ if(!logSync.handle)return;
+ if(logSync.busy){if(force)notice('A log is already saving. Please export again when it finishes.');return;}
+ if(browserStore.busy&&!force&&!allowDuringScan)return;
  const records=groupedEvents(),signature=logSignature(records);
  if(!force&&(signature===logSync.signature||(!records.length&&logSync.signature===null)))return;
  logSync.busy=true;
@@ -51,11 +53,12 @@ async function syncTimestampedLog(force=false){
   const file=await logSync.handle.getFileHandle(name,{create:true});
   const writer=await file.createWritable();
   try{await writer.write(excelWorkbook(records));await writer.close();}catch(e){try{await writer.abort();}catch{}throw e;}
-  logSync.signature=signature;await dbPut('settings',signature,'log-signature');
-  notice('Timestamped Excel log saved · '+file.name);
+  logSync.signature=signature;logSync.last={path:logSync.handle.name+'/'+file.name,saved_at:new Date().toISOString()};await dbPut('settings',logSync.last,'last-log');await dbPut('settings',signature,'log-signature');
+  notice('Timestamped Excel log saved · '+logSync.last.path);if(typeof poll==='function')await poll();
  }catch(e){notice('Log save pending: '+e.message,true);}finally{logSync.busy=false;}
 }
 async function initLogSync(){
+ logSync.last=await dbGet('settings','last-log')||null;
  logSync.handle=await dbGet('settings','logs-folder');logSync.signature=await dbGet('settings','log-signature')||null;
  const row=el('div');row.style.marginTop='15px';const label=el('label','Logs folder');const input=el('input');input.readOnly=true;input.value=logSync.handle?.name||'';input.style.width='calc(100% - 115px)';
  const choose=el('button','Choose…');choose.onclick=async()=>{try{const startIn=logSync.handle||browserStore.handles.reports;const handle=await showDirectoryPicker({id:'truebeam-logs',mode:'readwrite',...(startIn?{startIn}:{})});const same=logSync.handle&&await logSync.handle.isSameEntry(handle);logSync.handle=handle;if(!same){logSync.signature=null;await dbPut('settings',null,'log-signature');}input.value=handle.name;await dbPut('settings',handle,'logs-folder');await syncTimestampedLog();}catch(e){if(e.name!=='AbortError')notice(e.message,true);}};

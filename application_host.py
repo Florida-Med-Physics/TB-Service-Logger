@@ -18,9 +18,9 @@ class Conflict(ValueError):pass
 class SharedService:
     def __init__(self,home,clock=time.monotonic,defaults=None,shared_dir=None):
         self.home=Path(home);self.home.mkdir(parents=True,exist_ok=True)
-        self.shared_dir=Path(shared_dir) if shared_dir else None;self.mirror_lock=threading.Lock()
+        self.shared_dir=Path(shared_dir) if shared_dir else None;self.mirror_lock=threading.Lock();self.log_lock=threading.Lock()
         self.storage_root=self.shared_dir/'files' if self.shared_dir else self.home
-        self.clock=clock;self.stop=threading.Event();self.next_report=0;self.last_report=None
+        self.clock=clock;self.stop=threading.Event();self.next_report=0;self.last_report=None;self.last_log=None
         self.snapshot={'busy':False,'message':'Shared UFHPTI database ready.','last_scan':None}
         self.scan_lock=threading.Lock();self.engine=Engine(self.home)
         if self.shared_dir and (self.shared_dir/'settings.json').exists():
@@ -34,6 +34,8 @@ class SharedService:
             db.execute('CREATE TABLE IF NOT EXISTS attachments(id INTEGER PRIMARY KEY,record_id INTEGER,name TEXT,path TEXT)')
             db.execute('CREATE TABLE IF NOT EXISTS overrides(record_id INTEGER,field TEXT,value TEXT,PRIMARY KEY(record_id,field))')
             db.commit()
+        last_log_file=self.home/'last-log.json'
+        if last_log_file.exists():self.last_log=json.loads(last_log_file.read_text())
         key=self.home/'access-key'
         if not key.exists():
             fd=os.open(key,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
@@ -79,7 +81,7 @@ class SharedService:
                 if r['document_type']=='Therapist entry':
                     r['entryType']='manual'
                     r['sources']=[{'id':'a:'+str(a),'path':n,'error':''} for a,rid,n in attachments if rid in ids]
-            return dict(self.snapshot,folders_connected=all(self.engine.config.get(k) and os.path.isdir(self.engine.config[k]) and os.access(self.engine.config[k],os.R_OK) for k in ('reports','screenshots')),records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,database='Shared UFHPTI host database · edits save immediately.',shared=True)
+            return dict(self.snapshot,folders_connected=all(self.engine.config.get(k) and os.path.isdir(self.engine.config[k]) and os.access(self.engine.config[k],os.R_OK) for k in ('reports','screenshots')),records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,last_log=self.last_log,database='Shared UFHPTI host database · edits save immediately.',shared=True)
         finally:e.db.close()
     def update(self,payload):
         field=payload.get('field')
@@ -97,7 +99,7 @@ class SharedService:
             for source in event['sources']:
                 e.db.execute('UPDATE records SET '+field+'=? WHERE id=?',(value,source['id']))
                 e.db.execute('INSERT OR REPLACE INTO overrides VALUES(?,?,?)',(source['id'],field,value))
-            e.db.commit();self.mirror();return {'ok':True}
+            e.db.commit();self.mirror();self.log_change();return {'ok':True}
         except Exception:e.db.rollback();raise
         finally:e.db.close()
     def add_fault(self,payload):
@@ -124,7 +126,7 @@ class SharedService:
                     path=folder/(uuid.uuid4().hex+Path(name).suffix.lower());path.write_bytes(data);written.append(path)
                     db.execute('INSERT INTO attachments(record_id,name,path) VALUES(?,?,?)',(rid,name,str(path)))
                 db.commit();committed=True
-            self.mirror();return {'ok':True,'id':rid}
+            self.mirror();self.log_change();return {'ok':True,'id':rid}
         except Exception:
             if not committed:
                 for path in written:path.unlink(missing_ok=True)
@@ -152,7 +154,7 @@ class SharedService:
             columns=['path','kind','digest','imported','text','error','review','extractor_version']+FIELDS
             values=[str(path),kind,digest,time.strftime('%Y-%m-%dT%H:%M:%S'),text,error,'Closure documented','shared-upload']+[fields[k] for k in FIELDS]
             cur=e.db.execute('INSERT INTO records('+','.join(columns)+') VALUES('+','.join('?' for _ in columns)+')',values);e.db.commit()
-            self.mirror();return {'ok':True,'id':cur.lastrowid,'error':error}
+            self.mirror();self.log_change();return {'ok':True,'id':cur.lastrowid,'error':error}
         finally:e.db.close()
     def configure(self,payload):
         with self.scan_lock:
@@ -165,7 +167,12 @@ class SharedService:
             self.last_scan=-5;self.next_report=0
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
+    def log_change(self):
+        try:self.save_addition_log()
+        except Exception as exc:self.snapshot.update(message='Log save pending: '+str(exc)+'. Changes remain saved; retrying automatically.')
     def save_addition_log(self,force=False):
+        with self.log_lock:return self._save_change_log(force)
+    def _save_change_log(self,force=False):
         folder=self.engine.config.get('logs','')
         if not folder:
             if force:raise ValueError('Choose a Logs folder in Folder settings.')
@@ -182,6 +189,8 @@ class SharedService:
         write_report(records,output,overwrite=False)
         saved[str(folder)]=signature
         self.last_report=time.strftime('%Y-%m-%d %H:%M:%S')
+        self.last_log={'path':str(output),'saved_at':datetime.now().astimezone().isoformat()}
+        (self.home/'last-log.json').write_text(json.dumps(self.last_log))
         temporary=ledger.with_suffix('.tmp');temporary.write_text(json.dumps(saved));temporary.replace(ledger)
 
     def tick(self):

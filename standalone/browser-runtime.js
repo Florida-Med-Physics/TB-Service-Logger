@@ -13,7 +13,7 @@ async function openLocalDatabase(){
 function dbGet(store,key){return new Promise((resolve,reject)=>{const req=browserStore.db.transaction(store).objectStore(store).get(key);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 function dbAll(){return new Promise((resolve,reject)=>{const req=browserStore.db.transaction('records').objectStore('records').getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 function dbPut(store,value,key){return new Promise((resolve,reject)=>{const tx=browserStore.db.transaction(store,'readwrite');const req=key===undefined?tx.objectStore(store).put(value):tx.objectStore(store).put(value,key);let id;req.onsuccess=()=>id=req.result;tx.oncomplete=()=>resolve(id);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('Database transaction aborted.'));});}
-async function refreshLocalRecords(){browserStore.records=await dbAll();for(const record of browserStore.records){if(record.review==='Needs review'){record.review='Closure documented';await dbPut('records',record);}}}
+async function refreshLocalRecords(){browserStore.records=await dbAll();for(const record of browserStore.records){if(record.review==='Needs review'){record.review='Closure documented';await dbPut('records',record);}}if(typeof syncTimestampedLog==='function')await syncTimestampedLog(false,true);}
 function groupedEvents(){
  const groups=new Map();
  for(const stored of browserStore.records.slice().sort((a,b)=>a.id-b.id)){
@@ -208,7 +208,7 @@ async function browserFoldersConnected(){
  return folderConnection.ok;
 }
 async function localApi(route,body){
- if(route==='state')return new Response(JSON.stringify({folders_connected:await browserFoldersConnected(),records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Logs folder saves new timestamped Excel files when data changes.'}));
+ if(route==='state')return new Response(JSON.stringify({last_log:typeof logSync!=='undefined'?logSync.last:null,folders_connected:await browserFoldersConnected(),records:groupedEvents(),excluded:browserStore.records.filter(r=>uiExclusionReason(r)).map(r=>({id:r.id,sources:[{id:r.id,path:r.path}],reason:uiExclusionReason(r),error:r.error||''})),fields:LOCAL_FIELDS,config:browserStore.config,busy:browserStore.busy,message:browserStore.message,last_scan:browserStore.last_scan,job:browserStore.job,database:'This browser profile · IndexedDB · Logs folder saves new timestamped Excel files when data changes.'}));
  if(route==='browse'){
   if(!window.showDirectoryPicker)throw new Error('Open this HTML file in a current desktop version of Microsoft Edge or Google Chrome.');
   const kind=body.kind;if(!['reports','screenshots'].includes(kind))throw new Error('Choose the folder type.');

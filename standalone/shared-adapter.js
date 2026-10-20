@@ -10,7 +10,7 @@ async function initShared(){
  let faultRequestId=crypto.randomUUID();
  const originalPoll=poll;
  poll=async()=>{await originalPoll();if(state){browserStore.records=state.records;browserStore.busy=state.busy;}};
- command=async(action,body={})=>{try{const result=await(await api(action,body)).json();notice('Change saved on the shared host.');await poll();return result;}catch(e){notice(e.message,true);return null;}};
+ command=async(action,body={})=>{try{const result=await(await api(action,body)).json();await poll();return result;}catch(e){notice(e.message,true);return null;}};
  importSelectedFiles=async files=>{
   if(browserStore.busy)throw new Error('The host is scanning. Please try the file import again in a moment.');
   let problems=0;
@@ -36,6 +36,6 @@ async function initShared(){
   for(const node of [$('reports'),$('screenshots'),logsInput])node.readOnly=true;
   for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry'),logsChoose]){button.disabled=true;button.title='Host administrator only';}
  }
- $('excel').onclick=async()=>{await api('export',{});notice('A new timestamped Excel log was saved to the Logs folder.');};
+ $('excel').onclick=async()=>{try{const result=await(await api('export',{})).json();if(result.error)throw new Error(result.error);await poll();notice('A new timestamped Excel log was saved to the Logs folder.');}catch(e){notice('Export Report failed: '+e.message,true);}};
  setInterval(poll,2000);
 }
