@@ -41,7 +41,7 @@ class SharedService:
         if last_log_file.exists():self.last_log=json.loads(last_log_file.read_text())
         self.email_file=self.home/'evening-email.json'
         self.email_status=json.loads(self.email_file.read_text()) if self.email_file.exists() else {}
-        self.email_lock=threading.Lock();self.environ=os.environ;self.now=datetime.now
+        self.email_lock=threading.Lock();self.environ=os.environ;self.now=datetime.now;self.outlook_check=evening_email.outlook_available
         key=self.home/'access-key'
         if not key.exists():
             fd=os.open(key,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
@@ -190,18 +190,20 @@ class SharedService:
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
     def email_summary(self):
-        try:configured=bool(evening_email.smtp_settings(self.environ));problem=''
-        except ValueError as exc:configured=False;problem=str(exc)
-        return {'configured':configured,'problem':problem,'last_sent_at':self.email_status.get('last_sent_at'),'last_error':self.email_status.get('last_error','')}
+        try:method,settings=evening_email.delivery(self.environ,self.outlook_check);problem=''
+        except ValueError as exc:method,settings,problem=None,None,str(exc)
+        via='Outlook on this host' if method=='outlook' else settings['host'] if settings else ''
+        return {'configured':bool(method),'via':via,'problem':problem,'last_sent_at':self.email_status.get('last_sent_at'),'last_error':self.email_status.get('last_error','')}
     def send_evening_email(self,test=False):
-        settings=evening_email.smtp_settings(self.environ)
-        if not settings:raise ValueError('Set TRUEBEAM_SMTP_HOST and TRUEBEAM_EMAIL_FROM on the host computer, then restart the app.')
+        method,settings=evening_email.delivery(self.environ,self.outlook_check)
         recipients=self.engine.config.get('email_recipients') or []
         if not recipients:raise ValueError('Add at least one email address, then save email settings.')
         now=self.now();last=self.email_status.get('last_sent_at')
         since=datetime.fromisoformat(last) if last else now-timedelta(days=1)
         records=evening_email.new_entries(self.state()['records'],since)
-        evening_email.send(evening_email.build_message(records,recipients,settings['sender'],since,now,test=test),settings)
+        message=evening_email.build_message(records,recipients,settings['sender'] if settings else '',since,now,test=test)
+        if method=='outlook':evening_email.send_outlook(message)
+        else:evening_email.send(message,settings)
         return now,len(records)
     def email_tick(self):
         with self.email_lock:
@@ -216,7 +218,7 @@ class SharedService:
     def email_test(self):
         with self.email_lock:
             try:sent,count=self.send_evening_email(test=True)
-            except (OSError,smtplib.SMTPException) as exc:raise ValueError('Test email failed: '+str(exc)) from None
+            except (OSError,smtplib.SMTPException,subprocess.TimeoutExpired) as exc:raise ValueError('Test email failed: '+str(exc)) from None
         return {'ok':True,'entries':count,'recipients':len(self.engine.config.get('email_recipients') or [])}
     def log_change(self):
         try:self.save_addition_log()
