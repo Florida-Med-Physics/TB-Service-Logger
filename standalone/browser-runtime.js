@@ -7,7 +7,7 @@ function scriptBlob(name){return URL.createObjectURL(new Blob([binaryAsset(name)
 async function openLocalDatabase(){
  browserStore.db=await new Promise((resolve,reject)=>{const req=indexedDB.open('truebeam-standalone-v1',1);req.onupgradeneeded=()=>{const db=req.result;const records=db.createObjectStore('records',{keyPath:'id',autoIncrement:true});records.createIndex('key','key',{unique:true});db.createObjectStore('settings');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
  for(const kind of ['reports','screenshots']){const handle=await dbGet('settings',kind);if(handle){browserStore.handles[kind]=handle;browserStore.config[kind]=handle.name;}}
- const email=await dbGet('settings','email');if(email){browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;}
+ const email=await dbGet('settings','email');if(email){browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;browserStore.config.email_time=email.time;}
  if(browserStore.handles.reports&&browserStore.handles.screenshots)browserStore.message='Folders remembered. Start monitoring to resume; grant access if prompted.';
  await refreshLocalRecords();
 }
@@ -248,8 +248,8 @@ async function localApi(route,body){
   return new Response(JSON.stringify(scheduleAction(route,body,async()=>{await scanFolders();await new Promise(resolve=>setTimeout(resolve,2200));await scanFolders();})));
  }
  if(route==='email-settings'){
-  const email={enabled:Boolean(body.enabled),recipients:(body.recipients||[]).map(String)};await dbPut('settings',email,'email');
-  browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;return new Response(JSON.stringify({ok:true}));
+  const email={enabled:Boolean(body.enabled),recipients:(body.recipients||[]).map(String),time:String(body.time||'18:00')};await dbPut('settings',email,'email');
+  browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;browserStore.config.email_time=email.time;return new Response(JSON.stringify({ok:true}));
  }
  if(route==='pause'){browserStore.config.running=false;browserStore.stopRequested=true;browserStore.message='Monitoring paused. Existing entries remain saved.';return new Response(JSON.stringify(scheduleAction(route,body,async()=>{})));}
  if(route==='scan'||route==='retry'){

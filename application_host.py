@@ -1,10 +1,12 @@
 """UFHPTI internal shared host for the existing, unchanged HTML interface."""
-import argparse, base64, hashlib, ipaddress, json, mimetypes, os, re, secrets, socket, sqlite3, subprocess, sys, tempfile, threading, time, uuid, webbrowser
+import argparse, base64, hashlib, ipaddress, json, mimetypes, os, re, secrets, smtplib, socket, sqlite3, subprocess, sys, tempfile, threading, time, uuid, webbrowser
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from datetime import datetime, timedelta
 from core import Engine, FIELDS, SUPPORTED, extract, parse
+import evening_email
 
 BASE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent))
 DEFAULTS={
@@ -37,6 +39,9 @@ class SharedService:
             db.commit()
         last_log_file=self.home/'last-log.json'
         if last_log_file.exists():self.last_log=json.loads(last_log_file.read_text())
+        self.email_file=self.home/'evening-email.json'
+        self.email_status=json.loads(self.email_file.read_text()) if self.email_file.exists() else {}
+        self.email_lock=threading.Lock();self.environ=os.environ;self.now=datetime.now
         key=self.home/'access-key'
         if not key.exists():
             fd=os.open(key,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
@@ -82,7 +87,7 @@ class SharedService:
                 if r['document_type']=='Therapist entry':
                     r['entryType']='manual'
                     r['sources']=[{'id':'a:'+str(a),'path':n,'error':''} for a,rid,n in attachments if rid in ids]
-            return dict(self.snapshot,folders_connected=all(self.engine.config.get(k) and os.path.isdir(self.engine.config[k]) and os.access(self.engine.config[k],os.R_OK) for k in ('reports','screenshots')),records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),last_report=self.last_report,last_log=self.last_log,database='Shared UFHPTI host database · edits save immediately.',shared=True)
+            return dict(self.snapshot,folders_connected=all(self.engine.config.get(k) and os.path.isdir(self.engine.config[k]) and os.access(self.engine.config[k],os.R_OK) for k in ('reports','screenshots')),records=records,excluded=excluded,fields=FIELDS,config=dict(self.engine.config),email_status=self.email_summary(),last_report=self.last_report,last_log=self.last_log,database='Shared UFHPTI host database · edits save immediately.',shared=True)
         finally:e.db.close()
     def update(self,payload):
         field=payload.get('field')
@@ -161,7 +166,7 @@ class SharedService:
         with self.scan_lock:
             logs=str(payload.get('logs',self.engine.config.get('logs',''))).strip()
             if logs and not Path(logs).is_dir():raise ValueError('Choose an existing logs folder.')
-            email={k:self.engine.config[k] for k in ('evening_email','email_recipients') if k in self.engine.config}
+            email={k:self.engine.config[k] for k in ('evening_email','email_recipients','email_time') if k in self.engine.config}
             self.engine.configure(dict(payload,output=payload.get('output') or self.engine.config.get('output') or str(self.home/'unused-report.xlsx')),reuse_existing=True)
             self.engine.config['logs']=logs
             self.engine.config.update(email)
@@ -178,11 +183,41 @@ class SharedService:
         if invalid:raise ValueError('Check these email addresses: '+', '.join(invalid))
         enabled=bool(payload.get('enabled'))
         if enabled and not recipients:raise ValueError('Add at least one email address to send the evening email.')
+        send_time=evening_email.parse_time(payload.get('time',self.engine.config.get('email_time')))
         with self.scan_lock:
-            self.engine.config.update(evening_email=enabled,email_recipients=recipients)
+            self.engine.config.update(evening_email=enabled,email_recipients=recipients,email_time=send_time)
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
+    def email_summary(self):
+        try:configured=bool(evening_email.smtp_settings(self.environ));problem=''
+        except ValueError as exc:configured=False;problem=str(exc)
+        return {'configured':configured,'problem':problem,'last_sent_at':self.email_status.get('last_sent_at'),'last_error':self.email_status.get('last_error','')}
+    def send_evening_email(self,test=False):
+        settings=evening_email.smtp_settings(self.environ)
+        if not settings:raise ValueError('Set TRUEBEAM_SMTP_HOST and TRUEBEAM_EMAIL_FROM on the host computer, then restart the app.')
+        recipients=self.engine.config.get('email_recipients') or []
+        if not recipients:raise ValueError('Add at least one email address, then save email settings.')
+        now=self.now();last=self.email_status.get('last_sent_at')
+        since=datetime.fromisoformat(last) if last else now-timedelta(days=1)
+        records=evening_email.new_entries(self.state()['records'],since)
+        evening_email.send(evening_email.build_message(records,recipients,settings['sender'],since,now,test=test),settings)
+        return now,len(records)
+    def email_tick(self):
+        with self.email_lock:
+            now=self.now()
+            if not evening_email.due(self.engine.config,self.email_status,now):return
+            self.email_status['last_attempt_at']=now.isoformat(timespec='seconds')
+            try:
+                sent,_=self.send_evening_email()
+                self.email_status.update(last_sent_at=sent.isoformat(timespec='seconds'),last_sent_date=sent.date().isoformat(),last_error='')
+            except Exception as exc:self.email_status['last_error']=now.strftime('%Y-%m-%d %H:%M')+' · '+str(exc)
+            self.email_file.write_text(json.dumps(self.email_status))
+    def email_test(self):
+        with self.email_lock:
+            try:sent,count=self.send_evening_email(test=True)
+            except (OSError,smtplib.SMTPException) as exc:raise ValueError('Test email failed: '+str(exc)) from None
+        return {'ok':True,'entries':count,'recipients':len(self.engine.config.get('email_recipients') or [])}
     def log_change(self):
         try:self.save_addition_log()
         except Exception as exc:self.snapshot.update(message='Log save pending: '+str(exc)+'. Changes remain saved; retrying automatically.')
@@ -224,6 +259,7 @@ class SharedService:
                     self.snapshot.update(message=self.engine.message or 'Host folders checked.')
                 finally:self.snapshot.update(busy=False,last_scan=time.strftime('%Y-%m-%d %H:%M:%S'));self.last_scan=self.clock()
         self.save_addition_log()
+        self.email_tick()
     def worker(self):
         while not self.stop.wait(.25):
             try:self.tick()
@@ -303,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(size) or b'{}')
             if not isinstance(body,dict):raise ValueError('Invalid request.')
             route=urlsplit(self.path).path.removeprefix('/api/');s=self.server.service
-            if route in ('configure','pause','export','retry','browse','email-settings') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
+            if route in ('configure','pause','export','retry','browse','email-settings','email-test') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
             if route=='browse':
                 command=[sys.executable,'--pick-folder'] if getattr(sys,'frozen',False) else [sys.executable,str(BASE/'shared_application.py'),'--pick-folder']
                 with tempfile.TemporaryDirectory() as picker_dir:
@@ -316,6 +352,7 @@ class Handler(BaseHTTPRequestHandler):
             elif route=='upload':result=s.upload(body)
             elif route=='configure':result=s.configure(body)
             elif route=='email-settings':result=s.email_settings(body)
+            elif route=='email-test':result=s.email_test()
             elif route=='pause':
                 with s.scan_lock:s.engine.config['running']=False;s.engine.config_path.write_text(json.dumps(s.engine.config,indent=2))
                 result={'ok':True}
