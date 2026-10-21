@@ -57,10 +57,22 @@ class SharedTests(unittest.TestCase):
   self.assertIn('1 fault',message['Subject']);self.assertIn('BK',body);self.assertNotIn('MLC fault',body)
   status=json.load(self.call('state'))['email_status'];self.assertEqual(status['last_error'],'');self.assertTrue(status['last_sent_at'])
  def test_test_email_explains_missing_mail_server(self):
-  self.service.environ={};self.call('email-settings',{'enabled':True,'recipients':['physics@example.org']}).read()
+  self.service.environ={};self.service.outlook_check=lambda:False
+  self.call('email-settings',{'enabled':True,'recipients':['physics@example.org']}).read()
   self.assertFalse(json.load(self.call('state'))['email_status']['configured'])
   with self.assertRaises(HTTPError) as error:self.call('email-test',{})
   self.assertIn('TRUEBEAM_SMTP_HOST',json.load(error.exception)['error'])
+ def test_test_email_uses_outlook_without_mail_server(self):
+  runs=[]
+  def fake_run(command,**options):
+   runs.append(json.loads(Path(command[-1]).read_text(encoding='utf-8')))
+   return type('Result',(),{'returncode':0,'stderr':''})()
+  self.service.environ={};self.service.outlook_check=lambda:True;self.fault()
+  self.call('email-settings',{'enabled':True,'recipients':['physics@example.org','therapy@example.org']}).read()
+  self.assertEqual(json.load(self.call('state'))['email_status']['via'],'Outlook on this host')
+  with patch('evening_email.subprocess.run',fake_run):self.assertEqual(json.load(self.call('email-test',{}))['entries'],1)
+  self.assertEqual(runs[0]['to'],'physics@example.org; therapy@example.org')
+  self.assertTrue(runs[0]['subject'].startswith('TEST'));self.assertNotIn('MLC fault',runs[0]['html'])
  def test_two_clients_merge_different_fields_and_reject_same_field_conflict(self):
   rid=self.fault()
   with ThreadPoolExecutor() as pool:
