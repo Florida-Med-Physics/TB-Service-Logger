@@ -141,11 +141,7 @@ function uiFilenameTime(path){
 function uiExclusionReason(r){
  if(r.entryType==='manual'||r.document_type==='Therapist entry')return r.issue||r.fault_code||r.fault_name?'':'Empty therapist entry.';
  const text=String(r.text||''),issue=String(r.issue||''),codes=String(r.fault_code||'')+' '+String(r.additional_codes||'');
- if(r.kind==='screenshots'){
-  if(/\b(?:\d{4}|\d{6})\b/.test(codes)||r.fault_name)return '';
-  if(issue&&!/\b(?:no|zero)\s+(?:active\s+)?(?:faults?|errors?|interlocks?)\b/i.test(issue)&&(r.severity||r.cause||r.impact||/\b(?:fault|error|interlock|failed|failure|mismatch)\b/i.test(issue)))return '';
-  return 'No identifiable fault was found in this screenshot.';
- }
+ if(r.kind==='screenshots')return '';
  const header=/\b(?:work\s+order\s+information|field\s+service\s+report|service\s+report)\b/i.test(text),labelled=/\b(?:closure\s+summary|problem\s+description|work\s+performed\s+comments)\b/i.test(text),wo=/\bWO[-\s]*\d{5,}\b/i.test(String(r.work_order||'')+' '+text);
  if([r.issue,r.work_performed,r.service_date,r.engineer,r.work_order].some(Boolean)&&(header||(wo&&labelled)))return '';
  if(/\b(?:checklist|parameters?)\b/i.test(text)&&(/\b(?:PMP|PMI|prevent(?:ive|ative)\s+maintenance)\b/i.test(text)||/\bH\d{6}\b/.test(text))&&text.trim().length>=20)return '';
@@ -155,6 +151,20 @@ function uiEventTime(value){
  const text=String(value||'').split(/Additional fault codes:/i)[0].trim();
  const date=new Date(text);
  return Number.isNaN(date.getTime())?(text.split('\n')[0]||'-'):date.toLocaleDateString()+'\n'+date.toLocaleTimeString();
+}
+
+function uiGroupScreenshotWindows(events){
+ const result=[],windows=[],linked=new Set(events.filter(e=>e.linkTarget).map(e=>e.linkTarget));
+ const stamp=e=>{const value=Date.parse(e.service_date||'');return Number.isFinite(value)?value:null;};
+ for(const event of events.slice().sort((a,b)=>(stamp(a)??Infinity)-(stamp(b)??Infinity)||a.id-b.id)){
+  const when=stamp(event);
+  if(event.kind!=='screenshots'||event.entryType==='manual'||event.document_type==='Therapist entry'||event.linkTarget||linked.has(event.id)||when===null){result.push(event);continue;}
+  const found=windows.slice().reverse().find(([start])=>when-start>=0&&when-start<=300000);
+  if(!found){result.push(event);windows.push([when,event]);continue;}
+  const target=found[1];target.sources.push(...event.sources);target.recordIds.push(...event.recordIds);
+  for(const field of ['fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','error'])target[field]=[...new Set([target[field],event[field]].flatMap(v=>String(v||'').split('\n')).filter(Boolean))].join('\n');
+ }
+ return result;
 }
 
 const $=id=>document.getElementById(id);
@@ -288,7 +298,7 @@ $('results').textContent=visible.length+' of '+all.filter(r=>r.kind===kind).leng
 $('last-scan').textContent=state.last_scan?'Last scan: '+state.last_scan:'No scan completed yet';$('database-path').textContent='Database: '+state.database;
 // Routine scans stay silent; only folder problems or warnings replace the steady status.
 const routine=/^(Monitoring established|Host folders checked|Excel updated)/.test(state.message||'');
-$('dot').className='dot'+(state.config.running?' active':'');$('monitor-status').textContent=!state.config.running?'Paused · '+state.message:state.folders_connected&&routine?'Connected · Actively monitoring':'Monitoring · '+state.message;
+$('dot').className='dot'+(state.config.running?' active':'');$('monitor-status').textContent=!state.config.running?'Paused · '+state.message:state.folders_connected&&routine?'Monitoring':'Monitoring · '+state.message;
 const log=state.last_log;const logLine=$('log-status');logLine.textContent=(state.config.running?'Monitoring · ':'Paused · ')+(log?'Last timestamped log saved: '+log.path+' at '+new Date(log.saved_at).toLocaleString():'Last timestamped log saved: none yet');
 $('folder-connection').textContent=state.folders_connected?'Connection Established':'Connect folders';$('folder-connection').classList.toggle('connected',Boolean(state.folders_connected));
 $('start').textContent=state.config.running?'Save folders & monitor':'Start monitoring';

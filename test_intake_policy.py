@@ -16,12 +16,20 @@ class IntakeTests(unittest.TestCase):
  def test_irrelevant_pdf_and_empty_screenshot_are_excluded(self):
   self.assertTrue(exclusion_reason({'kind':'reports','text':'PPG-HT-G product guide','sources':[{'path':'PPG-HT-G.pdf'}]}))
   self.assertTrue(exclusion_reason({'kind':'reports','text':'The parameter settings in this product guide','document_type':'PMP parameters','issue':'PMP parameters'}))
-  self.assertTrue(exclusion_reason({'kind':'screenshots','text':'Treatment screen','issue':''}))
-  self.assertTrue(exclusion_reason({'kind':'screenshots','issue':'No active faults'}))
+  self.assertEqual(exclusion_reason({'kind':'screenshots','text':'Treatment screen','issue':''}),'')
+  self.assertEqual(exclusion_reason({'kind':'screenshots','issue':'No active faults'}),'')
  def test_actual_reports_and_manual_faults_without_codes_are_kept(self):
   report={'kind':'reports','text':'Work Order Information\nWork Order WO-004612326\nSubject Artifacts on conebeam\nClosure Summary Inspected imaging','work_order':'WO-004612326','issue':'Artifacts on conebeam'}
   self.assertEqual(exclusion_reason(report),'')
   self.assertEqual(exclusion_reason({'kind':'reports','text':'PMP CHECKLIST H192905 preventive maintenance parameters'}),'')
   self.assertEqual(exclusion_reason({'kind':'screenshots','document_type':'Therapist entry','issue':'Therapist observed a fault'}),'')
   self.assertEqual(exclusion_reason({'kind':'screenshots','fault_code':'420219'}),'')
-if __name__=='__main__':unittest.main()
+ def test_five_minute_windows_do_not_chain_indefinitely(self):
+  from intake_policy import group_screenshot_windows
+  records=[dict(id=i,kind='screenshots',service_date=time,sources=[{'id':i,'path':str(i)+'.png'}],fault_code=code) for i,time,code in [(1,'2026-10-21T10:00:00',''),(2,'2026-10-21T10:05:00','420219'),(3,'2026-10-21T10:05:01',''),(4,'2026-10-21T10:09:00','100000')]]
+  groups=group_screenshot_windows(records)
+  self.assertEqual(len(groups),2)
+  self.assertEqual([s['id'] for s in groups[0]['sources']],[1,2])
+  self.assertEqual(groups[0]['fault_code'],'420219')
+  self.assertEqual([s['id'] for s in groups[1]['sources']],[3,4])
+if __name__=='__main__' :unittest.main()

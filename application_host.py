@@ -196,7 +196,7 @@ class SharedService:
     def tick(self):
         if self.engine.config.get('running') and self.clock()-self.last_scan>=5:
             with self.scan_lock:
-                self.snapshot.update(busy=True,message='Checking host folders…')
+                self.snapshot.update(busy=True,message='Monitoring established folders.')
                 try:
                     self.engine.scan(auto_export=False)
                     # Reapply persisted edits, including intentionally empty values.

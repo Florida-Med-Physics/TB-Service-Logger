@@ -155,10 +155,7 @@ class Engine:
                 if row.get('document_type')!='Therapist entry' and Path(row['path']).suffix.lower() in IMAGE_SUFFIXES and row['id'] not in manual_dates:
                     row['service_date']=screenshot_file_time(row['path'])
                 else:row['service_date']=clean_event_time(row['service_date'])
-            # Only merge automatically when an explicit event timestamp is present.
-            normalized = lambda value: re.sub(r'\s+', '', value or '').lower()
-            timestamp = row['service_date']
-            key = ('fault', normalized(row['machine']), normalized(row['fault_code']), normalized(row['fault_name']), normalized(timestamp), normalized(row['issue'])) if row['fault_code'] and timestamp and row['kind']=='screenshots' else ('file',row['kind'],row['digest'])
+            key = ('screenshot',row['id']) if row['kind']=='screenshots' else ('file',row['kind'],row['digest'])
             if row['id'] in links: key = ('manual',links[row['id']],row['kind'])
             elif row['id'] in links.values(): key = ('manual',row['id'],row['kind'])
             if key not in groups:
@@ -167,7 +164,8 @@ class Engine:
                 sources=groups[key]['sources']
                 groups[key]=dict(row,sources=sources,possible_duplicate=False)
             groups[key]['sources'].append({'id':row['id'],'path':row['path'],'error':row['error']})
-        events=list(groups.values())
+        from intake_policy import group_screenshot_windows
+        events=group_screenshot_windows(list(groups.values()),set(links)|set(links.values()))
         for event in events:
             event['possible_duplicate'] = any(other['id']!=event['id'] and event['fault_code'] and event['fault_code']==other['fault_code'] and event['fault_name']==other['fault_name'] and event['machine']==other['machine'] for other in events)
         return list(reversed(events))

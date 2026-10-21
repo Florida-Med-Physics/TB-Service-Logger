@@ -21,7 +21,7 @@ function groupedEvents(){
   if(record.kind==='screenshots'&&record.entryType!=='manual'&&!record.userDate)record.service_date=uiFilenameTime(record.path||record.key);
   if(uiExclusionReason(record))continue;
   const norm=v=>String(v||'').replace(/\s/g,'').toLowerCase();
-  const key=record.linkTarget?JSON.stringify(['manual',record.kind,record.linkTarget]):record.entryType==='manual'?JSON.stringify(['therapist',record.key]):record.kind==='screenshots'&&record.fault_code&&record.service_date?JSON.stringify(['fault',...['machine','fault_code','fault_name','service_date','issue'].map(k=>norm(record[k]))]):JSON.stringify(['file',record.kind,record.digest||record.key]);
+  const key=record.linkTarget?JSON.stringify(['manual',record.kind,record.linkTarget]):record.entryType==='manual'?JSON.stringify(['therapist',record.key]):record.kind==='screenshots'?JSON.stringify(['screenshot',record.id]):JSON.stringify(['file',record.kind,record.digest||record.key]);
   if(!groups.has(key))groups.set(key,{...record,sources:[],recordIds:[],possible_duplicate:false});
   let group=groups.get(key);
   if(record.linkTarget===record.id){const sources=group.sources,recordIds=group.recordIds;group={...record,sources,recordIds,possible_duplicate:false};groups.set(key,group);}
@@ -30,7 +30,7 @@ function groupedEvents(){
    for(const [index,attachment] of (record.attachments||[]).entries())group.sources.push({id:record.id+':a:'+index,path:attachment.name,error:''});
   }else group.sources.push({id:record.id,path:record.path,error:record.error||''});
  }
- const events=[...groups.values()];
+ const events=uiGroupScreenshotWindows([...groups.values()]);
  for(const event of events){delete event.handle;delete event.sourceFile;delete event.attachments;event.possible_duplicate=events.some(other=>other.id!==event.id&&other.kind===event.kind&&event.fault_code&&other.fault_code===event.fault_code&&other.fault_name===event.fault_name&&other.machine===event.machine);}
  return events.reverse();
 }
