@@ -20,6 +20,16 @@ class SharedTests(unittest.TestCase):
   return urlopen(Request(self.url+'/api/'+route,data=None if body is None else json.dumps(body).encode(),headers={'X-Local-Token':self.service.token if token else '',**({'Content-Type':'application/json'} if body is not None else {})}),timeout=15)
  def fault(self):
   return json.load(self.call('add-fault',{'service_date':'2026-10-16T12:00','worker_initials':'BK','issue':'MLC fault'}))['id']
+ def test_evening_email_settings_persist_and_survive_folder_changes(self):
+  recipients=['physics@example.org','therapy@example.org']
+  self.assertTrue(json.load(self.call('email-settings',{'enabled':True,'recipients':recipients+['physics@example.org']}))['ok'])
+  self.call('configure',{'reports':self.defaults['reports'],'screenshots':self.defaults['screenshots']}).read()
+  config=json.load(self.call('state'))['config']
+  self.assertTrue(config['evening_email']);self.assertEqual(config['email_recipients'],recipients)
+  self.assertEqual(json.loads((self.root/'network'/'settings.json').read_text())['email_recipients'],recipients)
+  for body in ({'enabled':True,'recipients':[]},{'enabled':False,'recipients':['not-an-address']}):
+   with self.assertRaises(HTTPError) as error:self.call('email-settings',body)
+   self.assertEqual(error.exception.code,400)
  def test_two_clients_merge_different_fields_and_reject_same_field_conflict(self):
   rid=self.fault()
   with ThreadPoolExecutor() as pool:
