@@ -18,7 +18,7 @@ class Bridge(QObject):
         super().__init__(window);self.window=window
     @Slot(str,str,str)
     def request(self,route,payload,request_id):
-        allowed={'state','inline-update','add-fault','upload','configure','pause','scan','retry','export','excel'}
+        allowed={'state','inline-update','add-fault','upload','configure','pause','scan','retry','export','excel','email-settings'}
         if route not in allowed:
             self.reply.emit(request_id,json.dumps({'error':'Unsupported application request.'}));return
         def work():

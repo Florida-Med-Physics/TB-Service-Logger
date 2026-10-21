@@ -1,5 +1,5 @@
 """UFHPTI internal shared host for the existing, unchanged HTML interface."""
-import argparse, base64, hashlib, ipaddress, json, mimetypes, os, secrets, socket, sqlite3, subprocess, sys, tempfile, threading, time, uuid, webbrowser
+import argparse, base64, hashlib, ipaddress, json, mimetypes, os, re, secrets, socket, sqlite3, subprocess, sys, tempfile, threading, time, uuid, webbrowser
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,6 +12,7 @@ DEFAULTS={
  'screenshots':r'W:\Varian\Transfer\TDS\H192905\PrintScreen',
  'output':r'U:\QA\SystemQA\LINAC QA\TrueBeam\TrueBeam_Service_Log.xlsx',
  'running':True}
+EMAIL=re.compile(r'^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$')
 def default_home():
     return Path(os.environ.get('TRUEBEAM_SHARED_HOME',str(Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'.truebeam-shared-log')))
 class Conflict(ValueError):pass
@@ -160,11 +161,26 @@ class SharedService:
         with self.scan_lock:
             logs=str(payload.get('logs',self.engine.config.get('logs',''))).strip()
             if logs and not Path(logs).is_dir():raise ValueError('Choose an existing logs folder.')
+            email={k:self.engine.config[k] for k in ('evening_email','email_recipients') if k in self.engine.config}
             self.engine.configure(dict(payload,output=payload.get('output') or self.engine.config.get('output') or str(self.home/'unused-report.xlsx')),reuse_existing=True)
             self.engine.config['logs']=logs
+            self.engine.config.update(email)
             self.engine.config['running']=bool(payload.get('running',True))
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
             self.last_scan=-5;self.next_report=0
+        if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
+        return {'ok':True}
+    def email_settings(self,payload):
+        recipients=payload.get('recipients',[])
+        if not isinstance(recipients,list):raise ValueError('Send email recipients as a list.')
+        recipients=list(dict.fromkeys(str(r).strip() for r in recipients if str(r).strip()))
+        invalid=[r for r in recipients if not EMAIL.match(r)]
+        if invalid:raise ValueError('Check these email addresses: '+', '.join(invalid))
+        enabled=bool(payload.get('enabled'))
+        if enabled and not recipients:raise ValueError('Add at least one email address to send the evening email.')
+        with self.scan_lock:
+            self.engine.config.update(evening_email=enabled,email_recipients=recipients)
+            self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
     def log_change(self):
@@ -287,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(size) or b'{}')
             if not isinstance(body,dict):raise ValueError('Invalid request.')
             route=urlsplit(self.path).path.removeprefix('/api/');s=self.server.service
-            if route in ('configure','pause','export','retry','browse') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
+            if route in ('configure','pause','export','retry','browse','email-settings') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
             if route=='browse':
                 command=[sys.executable,'--pick-folder'] if getattr(sys,'frozen',False) else [sys.executable,str(BASE/'shared_application.py'),'--pick-folder']
                 with tempfile.TemporaryDirectory() as picker_dir:
@@ -299,6 +315,7 @@ class Handler(BaseHTTPRequestHandler):
             elif route=='add-fault':result=s.add_fault(body)
             elif route=='upload':result=s.upload(body)
             elif route=='configure':result=s.configure(body)
+            elif route=='email-settings':result=s.email_settings(body)
             elif route=='pause':
                 with s.scan_lock:s.engine.config['running']=False;s.engine.config_path.write_text(json.dumps(s.engine.config,indent=2))
                 result={'ok':True}

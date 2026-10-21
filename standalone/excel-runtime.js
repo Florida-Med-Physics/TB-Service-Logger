@@ -62,6 +62,6 @@ async function initLogSync(){
  logSync.handle=await dbGet('settings','logs-folder');logSync.signature=await dbGet('settings','log-signature')||null;
  const row=el('div');row.style.marginTop='15px';const label=el('label','Logs folder');const input=el('input');input.readOnly=true;input.value=logSync.handle?.name||'';input.style.width='calc(100% - 115px)';
  const choose=el('button','Choose…');choose.onclick=async()=>{try{const startIn=logSync.handle||browserStore.handles.reports;const handle=await showDirectoryPicker({id:'truebeam-logs',mode:'readwrite',...(startIn?{startIn}:{})});const same=logSync.handle&&await logSync.handle.isSameEntry(handle);logSync.handle=handle;if(!same){logSync.signature=null;await dbPut('settings',null,'log-signature');}input.value=handle.name;await dbPut('settings',handle,'logs-folder');await syncTimestampedLog();}catch(e){if(e.name!=='AbortError')notice(e.message,true);}};
- row.append(label,input,choose,el('p','A new timestamped Excel log is saved whenever fault or service report data changes. Earlier logs are preserved.','sub'));$('folder-dialog').querySelector('.dialog-body').append(row);
+ row.append(label,input,choose,el('p','A new timestamped Excel log is saved whenever fault or service report data changes. Earlier logs are preserved.','sub'));$('folder-dialog').querySelector('.dialog-body').insertBefore(row,$('email-settings'));
  await syncTimestampedLog();setInterval(syncTimestampedLog,2000);
 }
