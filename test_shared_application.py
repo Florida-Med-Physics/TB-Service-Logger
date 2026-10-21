@@ -54,7 +54,8 @@ class SharedTests(unittest.TestCase):
   self.assertEqual(len(sent),1);address,message=sent[0]
   self.assertEqual(address,('relay.example.org',25));self.assertEqual(message['To'],'physics@example.org')
   body=message.get_body(('plain',)).get_content()
-  self.assertIn('1 fault',message['Subject']);self.assertIn('BK',body);self.assertNotIn('MLC fault',body)
+  self.assertEqual(message['Subject'],'UF TB MACHINE LOG: '+today.strftime('%m/%d/%Y'))
+  self.assertIn('1 fault',body);self.assertIn('BK',body);self.assertIn('Error Details: MLC fault',body);self.assertIn('Past 5 faults (1)',body)
   status=json.load(self.call('state'))['email_status'];self.assertEqual(status['last_error'],'');self.assertTrue(status['last_sent_at'])
  def test_test_email_explains_missing_mail_server(self):
   self.service.environ={};self.service.outlook_check=lambda:False
@@ -72,7 +73,19 @@ class SharedTests(unittest.TestCase):
   self.assertEqual(json.load(self.call('state'))['email_status']['via'],'Outlook on this host')
   with patch('evening_email.subprocess.run',fake_run):self.assertEqual(json.load(self.call('email-test',{}))['entries'],1)
   self.assertEqual(runs[0]['to'],'physics@example.org; therapy@example.org')
-  self.assertTrue(runs[0]['subject'].startswith('TEST'));self.assertNotIn('MLC fault',runs[0]['html'])
+  self.assertTrue(runs[0]['subject'].startswith('TEST - UF TB MACHINE LOG: '));self.assertIn('MLC fault',runs[0]['html'])
+ def test_email_tables_list_past_five_faults_and_withhold_patient_text(self):
+  import evening_email
+  faults=[dict(id=i,kind='screenshots',service_date='2026-10-%02dT10:00:00'%i,fault_code=str(420200+i),issue='Interlock %d'%i,sources=[{'id':i}]) for i in range(1,8)]
+  faults[6]['issue']='Patient: SAMPLE, SYNTHETIC  MRN 0000000'
+  report=dict(id=9,kind='reports',service_date='2026-10-20',work_order='WO-1',sources=[])
+  now=datetime(2026,10,21,18,0)
+  message=evening_email.build_message([faults[6],report],faults+[report],['physics@example.org'],'',datetime(2026,10,20,18,0),now)
+  body=message.get_body(('plain',)).get_content();recent=body.split('Past 5 faults (5)')[1]
+  self.assertEqual(message['Subject'],'UF TB MACHINE LOG: 10/21/2026')
+  self.assertEqual([c for c in ('420207','420206','420205','420204','420203','420202') if c in recent],['420207','420206','420205','420204','420203'])
+  self.assertNotIn('SYNTHETIC',body);self.assertIn(evening_email.WITHHELD,body)
+  self.assertIn('Event time: 10/07/2026 10:00',body);self.assertIn('Work order: WO-1',body);self.assertIn('Source count: 1',body)
  def test_two_clients_merge_different_fields_and_reject_same_field_conflict(self):
   rid=self.fault()
   with ThreadPoolExecutor() as pool:
