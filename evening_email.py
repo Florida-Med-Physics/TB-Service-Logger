@@ -1,5 +1,5 @@
-"""Evening summary email of new log entries. Screenshots and OCR text are never included."""
-import html, json, os, smtplib, socket, ssl, subprocess, sys, tempfile, time
+"""Evening summary email of new log entries and the most recent faults. Screenshots are never included."""
+import html, json, os, re, smtplib, socket, ssl, subprocess, sys, tempfile, time
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
@@ -16,9 +16,13 @@ $mail.Send();$session.SendAndReceive($false)
 # Give Outlook time to move the message out of the Outbox if this script started it.
 Start-Sleep -Seconds 8
 '''
-# Only structured or user-entered fields: OCR text from console screenshots (fault name, error details) may show patient information.
-FAULT_COLUMNS=[('service_date','Event time'),('fault_code','Error code'),('additional_codes','Additional codes'),('severity','Severity'),('work_performed','Resolution'),('worker_initials','Worker initials')]
-SERVICE_COLUMNS=[('service_date','Malfunction start'),('work_order','Work order #'),('case_number','Case #'),('category','Category'),('work_performed','Summary of work'),('engineer','Field engineer'),('service_status','Status')]
+# The app's table columns (index.html). Screenshots and file paths are never sent; only the source count.
+FAULT_COLUMNS=[('service_date','Event time'),('fault_code','Error code'),('additional_codes','Additional codes'),('fault_name','Fault name'),('severity','Severity'),('issue','Error Details'),('suggestions','SUGGESTED SOLUTION'),('work_performed','Resolution'),('worker_initials','Worker Initials'),('sources','Source count')]
+SERVICE_COLUMNS=[('service_date','Start date'),('machine_release','Release date'),('work_order','Work order'),('case_number','Case number'),('category','Category'),('issue','Subject'),('work_performed','Summary of work'),('parts_installed','Parts installed'),('fault_code','Error code'),('engineer','Engineer'),('work_hours','Work hours'),('downtime_hours','Downtime hours'),('service_status','Status'),('sources','Source count')]
+# OCR text from console screenshots can pick up the patient banner; withhold any cell that looks like it does.
+PATIENT_TEXT=re.compile(r'\b(patient|pt\.? ?name|mrn|medical record|d\.?o\.?b\.?|date of birth|birth ?date)\b',re.I)
+WITHHELD='[Withheld: may contain patient details. See the app.]'
+RECENT_FAULTS=5
 DEFAULT_TIME='18:00'
 
 def smtp_settings(environ=os.environ):
@@ -72,17 +76,29 @@ def due(config,status,now):
 def new_entries(records,since):
     return [r for r in records if str(r.get('imported') or '')>=since.strftime('%Y-%m-%dT%H:%M:%S')]
 
-def _rows(records,columns):
-    return [[str(r.get(key) or '').replace('\n',' ').strip() or '-' for key,_ in columns] for r in records]
+def _cell(record,key):
+    if key=='sources':return str(len(record.get('sources') or []))
+    value=str(record.get(key) or '').replace('\n',' ').strip()
+    if key=='service_date':
+        try:value=datetime.fromisoformat(value).strftime('%m/%d/%Y %H:%M' if 'T' in value else '%m/%d/%Y')
+        except ValueError:pass
+    return WITHHELD if PATIENT_TEXT.search(value) else value or '-'
 
-def build_message(records,recipients,sender,since,now,test=False):
+def _rows(records,columns):
+    return [[_cell(r,key) for key,_ in columns] for r in records]
+
+def recent_faults(records,count=RECENT_FAULTS):
+    faults=[r for r in records if r['kind']=='screenshots']
+    return sorted(faults,key=lambda r:str(r.get('service_date') or r.get('imported') or ''),reverse=True)[:count]
+
+def build_message(records,all_records,recipients,sender,since,now,test=False):
     faults=[r for r in records if r['kind']=='screenshots'];reports=[r for r in records if r['kind']=='reports']
-    subject=('TEST · ' if test else '')+'TrueBeam service log · '+now.strftime('%d %b %Y')+' · '+str(len(faults))+' fault'+('' if len(faults)==1 else 's')+', '+str(len(reports))+' service report'+('' if len(reports)==1 else 's')
-    period='New entries since '+since.strftime('%d %b %Y %H:%M')+'.'
-    footer='Screenshots and screenshot text are not included. Open the TrueBeam Service Log for full details. Sent by the TrueBeam Service Log host on '+socket.gethostname()+'.'
+    subject=('TEST - ' if test else '')+'UF TB MACHINE LOG: '+now.strftime('%m/%d/%Y')
+    period='New entries since '+since.strftime('%m/%d/%Y %H:%M')+': '+str(len(faults))+' fault'+('' if len(faults)==1 else 's')+', '+str(len(reports))+' service report'+('' if len(reports)==1 else 's')+'.'
+    footer='Screenshots are not included. Cells that may show patient details are withheld. Open the TrueBeam Service Log for full details. Sent by the TrueBeam Service Log host on '+socket.gethostname()+'.'
     text=[('This is a test of the evening email.\n' if test else '')+period,'']
-    body=['<p>'+('<b>This is a test of the evening email.</b><br>' if test else '')+html.escape(period)+'</p>']
-    for title,items,columns in (('Fault reports',faults,FAULT_COLUMNS),('Service reports',reports,SERVICE_COLUMNS)):
+    body=['<p style="font-family:Arial">'+('<b>This is a test of the evening email.</b><br>' if test else '')+html.escape(period)+'</p>']
+    for title,items,columns in (('New fault reports',faults,FAULT_COLUMNS),('New service reports',reports,SERVICE_COLUMNS),('Past '+str(RECENT_FAULTS)+' faults',recent_faults(all_records),FAULT_COLUMNS)):
         text.append(title+' ('+str(len(items))+')')
         body.append('<h3 style="font-family:Arial;margin:18px 0 6px">'+title+' ('+str(len(items))+')</h3>')
         if not items:
