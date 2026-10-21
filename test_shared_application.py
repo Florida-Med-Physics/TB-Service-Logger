@@ -1,4 +1,5 @@
 import csv,json,os,sqlite3,tempfile,threading,unittest
+from datetime import datetime
 from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -30,6 +31,36 @@ class SharedTests(unittest.TestCase):
   for body in ({'enabled':True,'recipients':[]},{'enabled':False,'recipients':['not-an-address']}):
    with self.assertRaises(HTTPError) as error:self.call('email-settings',body)
    self.assertEqual(error.exception.code,400)
+ def test_evening_email_sends_once_after_time_without_screenshot_text(self):
+  sent=[];fail=[]
+  class FakeSMTP:
+   def __init__(self,host,port,timeout):self.address=(host,port)
+   def __enter__(self):return self
+   def __exit__(self,*args):pass
+   def ehlo(self):pass
+   def has_extn(self,name):return False
+   def send_message(self,message):
+    if fail:raise OSError('relay refused connection')
+    sent.append((self.address,message))
+  self.service.environ={'TRUEBEAM_SMTP_HOST':'relay.example.org','TRUEBEAM_EMAIL_FROM':'truebeam@example.org'}
+  self.fault();self.call('email-settings',{'enabled':True,'recipients':['physics@example.org'],'time':'18:00'}).read()
+  today=datetime.now().replace(second=0,microsecond=0)
+  with patch('smtplib.SMTP',FakeSMTP):
+   self.service.now=lambda:today.replace(hour=17,minute=59);self.service.email_tick();self.assertEqual(sent,[])
+   fail.append(True);self.service.now=lambda:today.replace(hour=18,minute=1);self.service.email_tick()
+   self.assertIn('relay refused',json.load(self.call('state'))['email_status']['last_error'])
+   fail.clear();self.service.email_tick();self.assertEqual(sent,[])
+   self.service.now=lambda:today.replace(hour=18,minute=17);self.service.email_tick();self.service.email_tick()
+  self.assertEqual(len(sent),1);address,message=sent[0]
+  self.assertEqual(address,('relay.example.org',25));self.assertEqual(message['To'],'physics@example.org')
+  body=message.get_body(('plain',)).get_content()
+  self.assertIn('1 fault',message['Subject']);self.assertIn('BK',body);self.assertNotIn('MLC fault',body)
+  status=json.load(self.call('state'))['email_status'];self.assertEqual(status['last_error'],'');self.assertTrue(status['last_sent_at'])
+ def test_test_email_explains_missing_mail_server(self):
+  self.service.environ={};self.call('email-settings',{'enabled':True,'recipients':['physics@example.org']}).read()
+  self.assertFalse(json.load(self.call('state'))['email_status']['configured'])
+  with self.assertRaises(HTTPError) as error:self.call('email-test',{})
+  self.assertIn('TRUEBEAM_SMTP_HOST',json.load(error.exception)['error'])
  def test_two_clients_merge_different_fields_and_reject_same_field_conflict(self):
   rid=self.fault()
   with ThreadPoolExecutor() as pool:

@@ -18,7 +18,7 @@ dialog{border:1px solid var(--line);border-radius:12px;max-width:1100px;width:94
 .header-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
 .theme-toggle{background:transparent;border-color:#7893a7;color:#fff;white-space:nowrap}
 .theme-toggle:hover{background:#2b526d}
-.email-settings{display:grid;gap:7px;margin-top:20px;padding-top:17px;border-top:1px solid var(--line);max-width:640px}.email-toggle{display:flex;align-items:center;gap:9px}.email-toggle input{width:18px;height:18px;margin:0;padding:0}.email-toggle label{margin:0;font-size:14px}.email-settings button{justify-self:start}
+.email-settings{display:grid;gap:7px;margin-top:20px;padding-top:17px;border-top:1px solid var(--line);max-width:640px}.email-toggle{display:flex;align-items:center;gap:9px}.email-toggle input{width:18px;height:18px;margin:0;padding:0}.email-toggle label{margin:0;font-size:14px}.email-settings>button,.email-settings>input[type=time]{justify-self:start}
 :root[data-theme="dark"]{color-scheme:dark;--navy:#173b58;--navy2:#2b5c7d;--ink:#e1eaf2;--muted:#a6bacb;--line:#3a5062;--pale:#101c27;--blue:#263f55;--amber:#493b20;--green:#91d4b7}
 [data-theme="dark"] header{background:#102f46}
 [data-theme="dark"] .card,[data-theme="dark"] .tab,[data-theme="dark"] button,[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea{background:#1b2a38;color:var(--ink)}
@@ -118,7 +118,9 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 <div class="controls"><button class="primary" id="start">Start monitoring</button><button id="pause">Pause</button><button id="scan">Scan now</button></div>
 </div>
 <div class="email-settings" id="email-settings"><div class="email-toggle"><input type="checkbox" id="evening-email"><label for="evening-email">Send evening email</label></div>
-<label for="email-recipients">Evening email recipients</label><textarea id="email-recipients" rows="3" placeholder="name@example.org" autocomplete="off" spellcheck="false"></textarea><p class="sub">Enter one address per line or separate addresses with commas.</p><button id="save-email" type="button">Save email settings</button></div>
+<label for="email-recipients">Evening email recipients</label><textarea id="email-recipients" rows="3" placeholder="name@example.org" autocomplete="off" spellcheck="false"></textarea><p class="sub">Enter one address per line or separate addresses with commas.</p>
+<label for="email-time">Send time</label><input type="time" id="email-time" value="18:00">
+<div class="controls"><button id="save-email" type="button">Save email settings</button><button id="test-email" type="button">Send test email</button></div><p class="sub" id="email-status"></p></div>
 
 </div>
 </dialog>
@@ -306,7 +308,8 @@ const log=state.last_log;const logLine=$('log-status');logLine.textContent=(stat
 $('folder-connection').textContent=state.folders_connected?'Connection Established':'Connect folders';$('folder-connection').classList.toggle('connected',Boolean(state.folders_connected));
 $('start').textContent=state.config.running?'Save folders & monitor':'Start monitoring';
 }
-async function poll(){if(polling)return;polling=true;try{state=await(await api('state')).json();for(const r of state.records){if(r.review==='Needs review')r.review='Closure documented';if(r.service_status==='Needs review')r.service_status='Closure documented';}if(!loaded){$('reports').value=state.config.reports||'';$('screenshots').value=state.config.screenshots||'';$('evening-email').checked=Boolean(state.config.evening_email);$('email-recipients').value=(state.config.email_recipients||[]).join('\n');loaded=true;}
+async function poll(){if(polling)return;polling=true;try{state=await(await api('state')).json();for(const r of state.records){if(r.review==='Needs review')r.review='Closure documented';if(r.service_status==='Needs review')r.service_status='Closure documented';}if(!loaded){$('reports').value=state.config.reports||'';$('screenshots').value=state.config.screenshots||'';$('evening-email').checked=Boolean(state.config.evening_email);$('email-recipients').value=(state.config.email_recipients||[]).join('\n');$('email-time').value=state.config.email_time||'18:00';loaded=true;}
+const mail=state.email_status;$('test-email').hidden=!mail;$('email-status').textContent=!mail?'Evening emails are sent by the Windows host application. This browser-only page saves the setting but cannot send email.':!mail.configured?'Email server not set up on the host: '+(mail.problem||'set TRUEBEAM_SMTP_HOST and TRUEBEAM_EMAIL_FROM, then restart the app.'):(mail.last_error?'Last attempt failed: '+mail.last_error+' · ':'')+(mail.last_sent_at?'Last evening email sent '+new Date(mail.last_sent_at).toLocaleString()+'.':'No evening email sent yet.');
 if(state.job&&state.job.id!==lastJob){lastJob=state.job.id;if(pending.has(lastJob)){pending.delete(lastJob);notice(state.job.message,!state.job.ok);}}
 render();}catch(error){notice('Cannot reach the local helper. Keep the launcher window open. '+error.message,true);}finally{polling=false;}}
 function chooseTab(next){kind=next;document.querySelectorAll('.tab').forEach(tab=>{const active=tab.dataset.kind===kind;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;});$('report-panel').setAttribute('aria-labelledby',kind==='reports'?'tab-reports':'tab-faults');render();}
@@ -330,7 +333,8 @@ $('search').oninput=render;$('review-filter').onchange=render;
 $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim()});$('pause').onclick=()=>command('pause');$('scan').onclick=()=>command('scan');$('retry').onclick=()=>command('retry');
 $('save-email').onclick=async()=>{const enabled=$('evening-email').checked,recipients=[...new Set($('email-recipients').value.split(/[\s,;]+/).filter(Boolean))];const invalid=recipients.filter(address=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address));
  if(invalid.length)return notice('Check these email addresses: '+invalid.join(', '),true);if(enabled&&!recipients.length)return notice('Add at least one email address to send the evening email.',true);
- try{const result=await(await api('email-settings',{enabled,recipients})).json();if(result.error)throw new Error(result.error);$('email-recipients').value=recipients.join('\n');notice('Evening email '+(enabled?'on':'off')+' · '+recipients.length+' recipient'+(recipients.length===1?'':'s')+' saved.');await poll();}catch(error){notice(error.message,true);}};
+ try{const result=await(await api('email-settings',{enabled,recipients,time:$('email-time').value||'18:00'})).json();if(result.error)throw new Error(result.error);$('email-recipients').value=recipients.join('\n');notice('Evening email '+(enabled?'on':'off')+' · '+recipients.length+' recipient'+(recipients.length===1?'':'s')+' saved.');await poll();}catch(error){notice(error.message,true);}};
+$('test-email').onclick=async()=>{const button=$('test-email');button.disabled=true;notice('Sending test email with the saved recipients…');try{const result=await(await api('email-test',{})).json();if(result.error)throw new Error(result.error);notice('Test email sent to '+result.recipients+' recipient'+(result.recipients===1?'':'s')+' with '+result.entries+' new entr'+(result.entries===1?'y':'ies')+'.');}catch(error){notice(error.message,true);}finally{button.disabled=false;}};
 $('excel').onclick=async()=>{notice('Downloading the latest completed Excel export. Entries from a scan in progress will appear in the next export.');await download('excel','TrueBeam Service Log.xlsx');};
 
 document.querySelectorAll('.browse').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await(await api('browse',{kind:button.dataset.for})).json();if(result.path)$(button.dataset.for).value=result.path;}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
