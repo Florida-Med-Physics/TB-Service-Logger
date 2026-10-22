@@ -3,6 +3,7 @@ import html, json, os, re, smtplib, socket, ssl, subprocess, sys, tempfile, time
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 from pathlib import Path
+from report_export import STATUS_STYLE, fault_status
 
 # Mail server settings live in the host's environment so no password is stored in settings.json.
 # Without TRUEBEAM_SMTP_HOST, Windows hosts send through the signed-in classic Outlook mailbox.
@@ -17,7 +18,7 @@ $mail.Send();$session.SendAndReceive($false)
 Start-Sleep -Seconds 8
 '''
 # The app's table columns (index.html). Screenshots and file paths are never sent; only the source count.
-FAULT_COLUMNS=[('service_date','Event time'),('fault_code','Error code'),('additional_codes','Additional codes'),('fault_name','Fault name'),('severity','Severity'),('issue','Error Details'),('suggestions','SUGGESTED SOLUTION'),('work_performed','Resolution'),('worker_initials','Worker Initials'),('sources','Source count')]
+FAULT_COLUMNS=[('service_date','Event time'),('fault_code','Error code'),('additional_codes','Additional codes'),('fault_name','Fault name'),('severity','Severity'),('issue','Error Details'),('suggestions','Varian Suggested Solution'),('work_performed','Resolution/Fix'),('worker_initials','Initials'),('service_status','Status'),('sources','Source count')]
 SERVICE_COLUMNS=[('service_date','Start date'),('machine_release','Release date'),('work_order','Work order'),('case_number','Case number'),('category','Category'),('issue','Subject'),('work_performed','Summary of work'),('parts_installed','Parts installed'),('fault_code','Error code'),('engineer','Engineer'),('work_hours','Work hours'),('downtime_hours','Downtime hours'),('service_status','Status'),('sources','Source count')]
 # OCR text from console screenshots can pick up the patient banner; withhold any cell that looks like it does.
 PATIENT_TEXT=re.compile(r'\b(patient|pt\.? ?name|mrn|medical record|d\.?o\.?b\.?|date of birth|birth ?date)\b',re.I)
@@ -78,6 +79,7 @@ def new_entries(records,since):
 
 def _cell(record,key):
     if key=='sources':return str(len(record.get('sources') or []))
+    if key=='service_status' and record.get('kind')=='screenshots':return fault_status(record)
     value=str(record.get(key) or '').replace('\n',' ').strip()
     if key=='service_date':
         try:value=datetime.fromisoformat(value).strftime('%m/%d/%Y %H:%M' if 'T' in value else '%m/%d/%Y')
@@ -106,7 +108,12 @@ def build_message(records,all_records,recipients,sender,since,now,test=False):
         rows=_rows(items,columns)
         text+=['  '+' | '.join(label+': '+value for (_,label),value in zip(columns,row)) for row in rows]+['']
         cell='style="border:1px solid #cad7e0;padding:5px 8px;text-align:left;vertical-align:top"'
-        body.append('<table style="border-collapse:collapse;font-family:Arial;font-size:13px"><tr>'+''.join('<th '+cell+'>'+html.escape(label)+'</th>' for _,label in columns)+'</tr>'+''.join('<tr>'+''.join('<td '+cell+'>'+html.escape(value)+'</td>' for value in row)+'</tr>' for row in rows)+'</table>')
+        def td(key,value):
+            if key=='service_status' and columns is FAULT_COLUMNS and value in STATUS_STYLE:
+                fill,color=STATUS_STYLE[value]
+                return '<td style="border:1px solid #cad7e0;padding:5px 8px;vertical-align:top;font-weight:bold;background:#'+fill+';color:#'+color+'">'+html.escape(value)+'</td>'
+            return '<td '+cell+'>'+html.escape(value)+'</td>'
+        body.append('<table style="border-collapse:collapse;font-family:Arial;font-size:13px"><tr>'+''.join('<th '+cell+'>'+html.escape(label)+'</th>' for _,label in columns)+'</tr>'+''.join('<tr>'+''.join(td(key,value) for (key,_),value in zip(columns,row))+'</tr>' for row in rows)+'</table>')
     text.append(footer);body.append('<p style="font-family:Arial;color:#555;font-size:12px">'+html.escape(footer)+'</p>')
     message=EmailMessage();message['Subject']=subject;message['To']=', '.join(recipients)
     if sender:message['From']=sender

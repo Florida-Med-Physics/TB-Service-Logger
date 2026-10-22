@@ -98,7 +98,7 @@ class SharedService:
             event=next((r for r in e.events() if r['id']==int(payload['id'])),None)
             if not event:raise ValueError('Entry no longer exists.')
             current=event.get(field,'') or ''
-            if field=='service_status':current=current or event['review']
+            if field=='service_status' and event['kind']=='reports':current=current or event['review']
             if str(payload.get('expected','') or '')!=current:
                 raise Conflict('Someone else changed this value. Your edit was not applied. Reload, check their value, and reapply your change if appropriate.')
             value=str(payload.get('value','')).strip()

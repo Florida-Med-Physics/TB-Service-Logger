@@ -86,6 +86,17 @@ class SharedTests(unittest.TestCase):
   self.assertEqual([c for c in ('420207','420206','420205','420204','420203','420202') if c in recent],['420207','420206','420205','420204','420203'])
   self.assertNotIn('SYNTHETIC',body);self.assertIn(evening_email.WITHHELD,body)
   self.assertIn('Event time: 10/07/2026 10:00',body);self.assertIn('Work order: WO-1',body);self.assertIn('Source count: 1',body)
+ def test_fault_status_starts_open_and_saves_resolved_in_email(self):
+  import evening_email
+  rid=self.fault()
+  self.assertTrue(json.load(self.call('inline-update',{'id':rid,'field':'service_status','value':'Resolved','expected':''}))['ok'])
+  records=self.service.state()['records'];self.assertEqual(records[0]['service_status'],'Resolved')
+  other=dict(id=99,kind='screenshots',service_date='2026-10-15T10:00:00',issue='Other fault',sources=[])
+  message=evening_email.build_message(records+[other],records+[other],['physics@example.org'],'',datetime(2026,10,15,18,0),datetime(2026,10,16,18,0))
+  body=message.get_body(('plain',)).get_content();page=message.get_body(('html',)).get_content()
+  self.assertIn('Status: Resolved',body);self.assertIn('Status: Open',body)
+  self.assertIn('Varian Suggested Solution',body);self.assertIn('Resolution/Fix',body);self.assertIn('Initials: BK',body)
+  self.assertIn('background:#CDEED6',page);self.assertIn('background:#FDE2C4',page)
  def test_two_clients_merge_different_fields_and_reject_same_field_conflict(self):
   rid=self.fault()
   with ThreadPoolExecutor() as pool:

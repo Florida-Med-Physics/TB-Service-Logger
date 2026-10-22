@@ -13,7 +13,7 @@ PNG decoding snapshots file bytes and falls back to the browser image decoder. S
 ## Therapist fault entry
 Add fault opens a form with event date/time, therapist initials, error code and name if known, Error Details, Resolution if fixed and optional screenshots. Description, initials, and event time are required. The entry is saved immediately to the local database, appears in Fault Reports, remains editable, and is included in CSV and Excel reports. Screenshot attachments are retained in browser storage.
 
-Fault Reports has SUGGESTED SOLUTION, Resolution, Worker Initials, and Screenshot links. It has no Status or Machine column. Click plain-text values to edit; click longer descriptions for the full-text pop-up. Empty cells show a hyphen. Tables fit the page width and extend down the page.
+Fault Reports has Varian Suggested Solution, Resolution/Fix, Initials, Status, and Screenshot links. Status is Open (amber) until someone marks it Resolved (green). It has no Machine column. Print (landscape) prints the current table fitted to landscape pages. Click plain-text values to edit; click longer descriptions for the full-text pop-up. Empty cells show a hyphen. Tables fit the page width and extend down the page.
 
 ## Excel
 In Folder settings, choose Export Report and select a dedicated .xlsx output file. Its contents are replaced by both complete tables from the database. It saves after changes and re-saves every minute while the page is open. Background throttling, computer sleep, lost write permissions, or an Excel file lock may delay saving; failures are shown and retried. Keep the workbook closed in Excel. Export Report saves immediately. Editing the Excel output does not update the database.
