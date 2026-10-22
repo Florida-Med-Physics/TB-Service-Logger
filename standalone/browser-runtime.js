@@ -8,7 +8,7 @@ async function openLocalDatabase(){
  browserStore.db=await new Promise((resolve,reject)=>{const req=indexedDB.open('truebeam-standalone-v1',1);req.onupgradeneeded=()=>{const db=req.result;const records=db.createObjectStore('records',{keyPath:'id',autoIncrement:true});records.createIndex('key','key',{unique:true});db.createObjectStore('settings');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
  for(const kind of ['reports','screenshots']){const handle=await dbGet('settings',kind);if(handle){browserStore.handles[kind]=handle;browserStore.config[kind]=handle.name;}}
  const email=await dbGet('settings','email');if(email){browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;browserStore.config.email_time=email.time;}
- const alertList=await dbGet('settings','alert-recipients');if(alertList)browserStore.config.alert_recipients=alertList;
+ const alertList=await dbGet('settings','alert-recipients');browserStore.config.alert_recipients=alertList||['Physics@floridaproton.org','tfleming@floridaproton.org','Therapists@floridaproton.org'];
  if(browserStore.handles.reports&&browserStore.handles.screenshots)browserStore.message='Folders remembered. Start monitoring to resume; grant access if prompted.';
  await refreshLocalRecords();
 }

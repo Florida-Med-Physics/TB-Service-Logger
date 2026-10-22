@@ -14,6 +14,8 @@ DEFAULTS={
  'screenshots':r'W:\Varian\Transfer\TDS\H192905\PrintScreen',
  'output':r'U:\QA\SystemQA\LINAC QA\TrueBeam\TrueBeam_Service_Log.xlsx',
  'running':True}
+# Send Downtime Alert starts from this list until someone saves a different one in Folder settings.
+DEFAULT_ALERT_RECIPIENTS=['Physics@floridaproton.org','tfleming@floridaproton.org','Therapists@floridaproton.org']
 EMAIL=re.compile(r'^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$')
 def default_home():
     return Path(os.environ.get('TRUEBEAM_SHARED_HOME',str(Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'.truebeam-shared-log')))
@@ -31,6 +33,9 @@ class SharedService:
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
         if not self.engine.config_path.exists():
             self.engine.config=dict(defaults or DEFAULTS)
+            self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
+        if 'alert_recipients' not in self.engine.config:
+            self.engine.config['alert_recipients']=list(DEFAULT_ALERT_RECIPIENTS)
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         with self.connection() as db:

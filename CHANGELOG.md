@@ -18,6 +18,9 @@ Merged to `main` and pushed after v1.4.4. Release downloads have not been rebuil
 - The evening email includes every table column plus the five most recent faults, under the title "UF TB MACHINE LOG".
 
 ### Changed
+- Removed the Print (landscape) button; printing from the browser still uses landscape pages.
+- Desktop downloads always save to a Downloads folder on this computer, never a network share.
+- Downtime alert recipients default to Physics@floridaproton.org, tfleming@floridaproton.org and Therapists@floridaproton.org until a different list is saved.
 - Export Report saves a fresh Excel log of the current entries straight to the Downloads folder.
 - Import Varian work orders moved from the toolbar to Folder settings.
 - **[Physics review]** Fault Reports columns are now Varian Suggested Solution, a new free-text Current Status, Final Resolution (formerly Resolution), Initials, and a new Status column (Open or Resolved, shown amber or green) in the app, Excel logs, table downloads, and the evening email. Faults show as Open until someone marks them Resolved.

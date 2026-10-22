@@ -98,6 +98,10 @@ class SharedTests(unittest.TestCase):
   self.assertIn('Status: Resolved',body);self.assertIn('Status: Open',body)
   self.assertIn('Varian Suggested Solution',body);self.assertIn('Final Resolution',body);self.assertIn('Current Status: Waiting on field engineer',body);self.assertIn('Initials: BK',body)
   self.assertIn('background:#CDEED6',page);self.assertIn('background:#FDE2C4',page)
+ def test_downtime_alert_recipients_default_list(self):
+  from application_host import DEFAULT_ALERT_RECIPIENTS
+  self.assertEqual(json.load(self.call('state'))['config']['alert_recipients'],['Physics@floridaproton.org','tfleming@floridaproton.org','Therapists@floridaproton.org'])
+  self.assertEqual(DEFAULT_ALERT_RECIPIENTS,json.loads((self.root/'network'/'settings.json').read_text())['alert_recipients'])
  def test_downtime_alert_sends_scripted_email_and_refuses_identifiers(self):
   runs=[]
   def fake_run(command,**options):

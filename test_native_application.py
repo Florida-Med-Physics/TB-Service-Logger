@@ -99,4 +99,13 @@ class NativeTests(unittest.TestCase):
         from openpyxl import load_workbook
         wb=load_workbook(output);self.assertEqual(wb.sheetnames,['Service Reports','Fault Reports'])
         self.assertEqual(wb['Fault Reports']['B5'].value,'420219');wb.close()
+class UnifiedDownloadTests(unittest.TestCase):
+    def test_downloads_stay_on_this_computer(self):
+        import unified_application as ua
+        self.assertTrue(ua.is_network_path(r'\\fileserver\home\Downloads'))
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(ua.QStandardPaths,'writableLocation',return_value=r'\\fileserver\home\Downloads'),patch.dict(os.environ,{'USERPROFILE':folder}):
+                self.assertEqual(ua.local_downloads(),Path(folder)/'Downloads')
+            with patch.object(ua.QStandardPaths,'writableLocation',return_value=r'\\fileserver\home\Downloads'),patch.dict(os.environ,{'USERPROFILE':r'\\fileserver\home','LOCALAPPDATA':folder}):
+                self.assertEqual(ua.local_downloads(),Path(folder)/'TrueBeam Service Log'/'Downloads')
 if __name__=='__main__':unittest.main()

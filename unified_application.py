@@ -12,6 +12,18 @@ from shared_application import app_home,REPORT_FOLDER
 from application_host import BASE
 from PySide6.QtCore import QThreadPool
 
+def is_network_path(path):
+    text=str(path)
+    if text.startswith(('\\\\','//')):return True
+    if sys.platform=='win32' and len(text)>1 and text[1]==':':
+        import ctypes
+        return ctypes.windll.kernel32.GetDriveTypeW(text[:2]+'\\')==4  # DRIVE_REMOTE (mapped network drive)
+    return False
+def local_downloads():
+    """The user's Downloads folder, unless Windows redirects it to a network share; then a local fallback."""
+    for candidate in (QStandardPaths.writableLocation(QStandardPaths.DownloadLocation),os.path.join(os.environ.get('USERPROFILE',str(Path.home())),'Downloads')):
+        if candidate and not is_network_path(candidate):return Path(candidate)
+    return Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'TrueBeam Service Log'/'Downloads'
 class Bridge(QObject):
     reply=Signal(str,str)
     def __init__(self,window):
@@ -112,8 +124,8 @@ window.truebeamNativeRequest=async(route,body)=>{
         if error:self.last_error=error;QMessageBox.warning(self,'TrueBeam Service Log',error);return
         self.api=Api(url);self.view.load(QUrl.fromLocalFile(str(BASE/'standalone'/'TrueBeam-Local.html')))
     def download(self,request):
-        # Exports go straight to the Downloads folder; an existing file is never replaced.
-        folder=Path(QStandardPaths.writableLocation(QStandardPaths.DownloadLocation) or Path.home()/'Downloads');folder.mkdir(parents=True,exist_ok=True)
+        # Exports go straight to a Downloads folder on this computer; an existing file is never replaced.
+        folder=local_downloads();folder.mkdir(parents=True,exist_ok=True)
         path=folder/Path(request.suggestedFileName() or 'TrueBeam export').name;stem,suffix,n=path.stem,path.suffix,1
         while path.exists():path=folder/(stem+' ('+str(n)+')'+suffix);n+=1
         request.setDownloadDirectory(str(folder));request.setDownloadFileName(path.name)
