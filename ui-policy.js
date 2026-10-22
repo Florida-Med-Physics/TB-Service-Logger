@@ -34,7 +34,7 @@ function uiGroupScreenshotWindows(events){
   const found=windows.slice().reverse().find(([start])=>when-start>=0&&when-start<=300000);
   if(!found){result.push(event);windows.push([when,event]);continue;}
   const target=found[1];target.sources.push(...event.sources);target.recordIds.push(...event.recordIds);
-  for(const field of ['fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','error'])target[field]=[...new Set([target[field],event[field]].flatMap(v=>String(v||'').split('\n')).filter(Boolean))].join('\n');
+  for(const field of ['fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','current_status','work_performed','worker_initials','error'])target[field]=[...new Set([target[field],event[field]].flatMap(v=>String(v||'').split('\n')).filter(Boolean))].join('\n');
  }
  return result;
 }

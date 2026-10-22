@@ -149,6 +149,6 @@ async function initShared(){
   for(const node of [$('reports'),$('screenshots'),input])node.readOnly=true;
   for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry')]){button.disabled=true;button.title='Host administrator only';}
  }
- $('excel').onclick=()=>download('excel','TrueBeam_Service_Log.xlsx');
+ $('excel').onclick=()=>download('excel','TrueBeam_Service_Log_'+exportStamp()+'.xlsx');
  setInterval(poll,2000);
 }

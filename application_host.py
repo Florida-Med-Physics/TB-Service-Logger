@@ -166,7 +166,7 @@ class SharedService:
         with self.scan_lock:
             logs=str(payload.get('logs',self.engine.config.get('logs',''))).strip()
             if logs and not Path(logs).is_dir():raise ValueError('Choose an existing logs folder.')
-            email={k:self.engine.config[k] for k in ('evening_email','email_recipients','email_time') if k in self.engine.config}
+            email={k:self.engine.config[k] for k in ('evening_email','email_recipients','email_time','alert_recipients') if k in self.engine.config}
             self.engine.configure(dict(payload,output=payload.get('output') or self.engine.config.get('output') or str(self.home/'unused-report.xlsx')),reuse_existing=True)
             self.engine.config['logs']=logs
             self.engine.config.update(email)
@@ -186,6 +186,19 @@ class SharedService:
         send_time=evening_email.parse_time(payload.get('time',self.engine.config.get('email_time')))
         with self.scan_lock:
             self.engine.config.update(evening_email=enabled,email_recipients=recipients,email_time=send_time)
+            self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
+        if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
+        return {'ok':True}
+    def alert_settings(self,payload):
+        # Downtime alert recipients are kept apart from the evening email list.
+        recipients=payload.get('recipients',[])
+        if not isinstance(recipients,list):raise ValueError('Send alert recipients as a list.')
+        recipients=list(dict.fromkeys(str(r).strip() for r in recipients if str(r).strip()))
+        invalid=[r for r in recipients if not EMAIL.match(r)]
+        if invalid:raise ValueError('Check these email addresses: '+', '.join(invalid))
+        if len(recipients)>25:raise ValueError('Save 25 alert addresses or fewer.')
+        with self.scan_lock:
+            self.engine.config['alert_recipients']=recipients
             self.engine.config_path.write_text(json.dumps(self.engine.config,indent=2))
         if self.shared_dir:(self.shared_dir/'settings.json').write_text(json.dumps(self.engine.config,indent=2))
         return {'ok':True}
@@ -215,6 +228,16 @@ class SharedService:
                 self.email_status.update(last_sent_at=sent.isoformat(timespec='seconds'),last_sent_date=sent.date().isoformat(),last_error='')
             except Exception as exc:self.email_status['last_error']=now.strftime('%Y-%m-%d %H:%M')+' · '+str(exc)
             self.email_file.write_text(json.dumps(self.email_status))
+    def downtime_alert(self,payload):
+        method,settings=evening_email.delivery(self.environ,self.outlook_check)
+        message=evening_email.build_downtime_alert(payload,self.engine.config.get('alert_recipients') or [],settings['sender'] if settings else '',self.now())
+        recipients=message['To'].split(', ')
+        with self.email_lock:
+            try:
+                if method=='outlook':evening_email.send_outlook(message)
+                else:evening_email.send(message,settings)
+            except (OSError,smtplib.SMTPException,subprocess.TimeoutExpired) as exc:raise ValueError('Downtime alert failed: '+str(exc)) from None
+        return {'ok':True,'recipients':len(recipients)}
     def email_test(self):
         with self.email_lock:
             try:sent,count=self.send_evening_email(test=True)
@@ -326,9 +349,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not row or not Path(row[0]).is_file():raise ValueError('Original file unavailable on the host.')
                 path=Path(row[0]);return self.respond(200,path.read_bytes(),mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
             if route.path=='/api/excel':
-                path=Path(s.engine.config['output'])
-                if not path.is_file():raise ValueError('Report not created. Check the shared report folder on the host.')
-                return self.respond(200,path.read_bytes(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                # Export Report: a fresh workbook of the current log, downloaded by the client.
+                from report_export import write_report
+                with tempfile.TemporaryDirectory() as folder:
+                    path=Path(folder)/'export.xlsx';write_report(s.state()['records'],path)
+                    return self.respond(200,path.read_bytes(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             return self.respond(404,{'error':'Not found.'})
         except (ValueError,OSError) as e:return self.respond(400,{'error':str(e)})
     def do_POST(self):
@@ -341,7 +366,7 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(size) or b'{}')
             if not isinstance(body,dict):raise ValueError('Invalid request.')
             route=urlsplit(self.path).path.removeprefix('/api/');s=self.server.service
-            if route in ('configure','pause','export','retry','browse','email-settings','email-test') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
+            if route in ('configure','pause','export','retry','browse','email-settings','email-test','alert-settings') and not self.local_admin():return self.respond(403,{'error':'Manage folder settings from the host computer.'})
             if route=='browse':
                 command=[sys.executable,'--pick-folder'] if getattr(sys,'frozen',False) else [sys.executable,str(BASE/'shared_application.py'),'--pick-folder']
                 with tempfile.TemporaryDirectory() as picker_dir:
@@ -355,6 +380,8 @@ class Handler(BaseHTTPRequestHandler):
             elif route=='configure':result=s.configure(body)
             elif route=='email-settings':result=s.email_settings(body)
             elif route=='email-test':result=s.email_test()
+            elif route=='downtime-alert':result=s.downtime_alert(body)
+            elif route=='alert-settings':result=s.alert_settings(body)
             elif route=='pause':
                 with s.scan_lock:s.engine.config['running']=False;s.engine.config_path.write_text(json.dumps(s.engine.config,indent=2))
                 result={'ok':True}

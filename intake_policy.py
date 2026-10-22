@@ -38,7 +38,7 @@ def group_screenshot_windows(events,linked=()):
         if target is None:
             result.append(event);windows.append((when,event));continue
         target['sources'].extend(event['sources'])
-        for field in ('fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','error'):
+        for field in ('fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','current_status','work_performed','worker_initials','error'):
             values=list(dict.fromkeys(v for value in (target.get(field,''),event.get(field,'')) for v in str(value or '').split('\n') if v))
             target[field]='\n'.join(values)
     return result

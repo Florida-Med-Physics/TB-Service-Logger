@@ -85,9 +85,16 @@ th,td{padding:8px 4px}.inline-group{gap:2px}.text-preview{padding:0}.editable-va
 .editable-value,[data-theme="dark"] .editable-value{white-space:pre-line}
 #folder-connection.connected{background:#187647;color:#fff;border-color:#187647}#folder-connection{font-weight:700}
 
-/* Larger table text so the log reads comfortably on the console and in print. */
-th{font-size:12px}.editable-value,[data-theme="dark"] .editable-value{font-size:14px}.editable-value.secondary{font-size:13px}.editable-value.code{font-size:15px}.editable-value.badge{font-size:13px}.text-preview{font-size:14px}.inline-field,.inline-group .inline-field{font-size:14px}.inline-label{font-size:11px}.source-links{font-size:12px}
+/* Large text throughout so the log reads easily from across the treatment console. */
+body{font-size:17px}button,input,select,textarea{font-size:16px}
+p.sub,.intro p,#log-status,#monitor-status,.table-foot,footer,#results{font-size:15px!important}
+.stat span{font-size:16px}.stat small{font-size:15px}.stat strong{font-size:36px}
+.tab{font-size:18px}h2{font-size:21px}label,.dialog-body label{font-size:16px}
+th{font-size:15px}.editable-value,[data-theme="dark"] .editable-value{font-size:17px}.editable-value.secondary{font-size:16px}.editable-value.code{font-size:18px}.editable-value.badge{font-size:16px}.text-preview{font-size:17px}.inline-field,.inline-group .inline-field{font-size:17px}.inline-label{font-size:14px}.source-links{font-size:15px}td::before{font-size:15px!important}
+.dialog-body input,.dialog-body select,.dialog-body textarea,.edit-grid input,.edit-grid textarea{font-size:17px}.warning,.notice{font-size:16px}
+.downtime-alert{border-color:#f0b4ad;font-weight:650}
 /* Fault status colors: Open = amber, Resolved = green. */
+.editable-value.badge.status-open,.editable-value.badge.status-resolved{white-space:nowrap!important}
 .editable-value.badge.status-open,[data-theme="dark"] .editable-value.badge.status-open{background:#fde2c4;color:#7a3300;font-weight:700;border-radius:999px;padding:3px 10px}
 .editable-value.badge.status-resolved,[data-theme="dark"] .editable-value.badge.status-resolved{background:#cdeed6;color:#0f5128;font-weight:700;border-radius:999px;padding:3px 10px}
 /* Print the current table on landscape pages fitted to the page width. */
@@ -98,7 +105,7 @@ th{font-size:12px}.editable-value,[data-theme="dark"] .editable-value{font-size:
  main,.card{max-width:none;margin:0;padding:0;border:0;box-shadow:none}
  .tabs .tab:not([aria-selected=true]){display:none}
  thead{position:static;display:table-header-group}tr{break-inside:avoid}
- th{font-size:11pt}td,.editable-value,.text-preview,.source-links{font-size:11pt}
+ th{font-size:12pt}td,.editable-value,.text-preview,.source-links{font-size:13pt}
  .text-preview{display:block;-webkit-line-clamp:unset;max-height:none;overflow:visible}
  .sort-column{pointer-events:none}
 }
@@ -141,6 +148,8 @@ th{font-size:12px}.editable-value,[data-theme="dark"] .editable-value{font-size:
 <label for="email-recipients">Evening email recipients</label><textarea id="email-recipients" rows="3" placeholder="name@example.org" autocomplete="off" spellcheck="false"></textarea><p class="sub">Enter one address per line or separate addresses with commas.</p>
 <label for="email-time">Send time</label><input type="time" id="email-time" value="18:00">
 <div class="controls"><button id="save-email" type="button">Save email settings</button><button id="test-email" type="button">Send test email</button></div><p class="sub" id="email-status"></p></div>
+<div class="email-settings" id="alert-settings"><label for="alert-recipients">Downtime alert recipients</label><textarea id="alert-recipients" rows="3" placeholder="name@example.org" autocomplete="off" spellcheck="false"></textarea><p class="sub">Send Downtime Alert fills its To box from this list. This list is separate from the evening email. The addresses can still be changed on each alert.</p>
+<div class="controls"><button id="save-alerts" type="button">Save alert recipients</button></div></div>
 
 </div>
 </dialog>
@@ -187,7 +196,7 @@ function uiGroupScreenshotWindows(events){
   const found=windows.slice().reverse().find(([start])=>when-start>=0&&when-start<=300000);
   if(!found){result.push(event);windows.push([when,event]);continue;}
   const target=found[1];target.sources.push(...event.sources);target.recordIds.push(...event.recordIds);
-  for(const field of ['fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','error'])target[field]=[...new Set([target[field],event[field]].flatMap(v=>String(v||'').split('\n')).filter(Boolean))].join('\n');
+  for(const field of ['fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','current_status','work_performed','worker_initials','error'])target[field]=[...new Set([target[field],event[field]].flatMap(v=>String(v||'').split('\n')).filter(Boolean))].join('\n');
  }
  return result;
 }
@@ -209,7 +218,7 @@ let token=location.hash.slice(1);
 try{if(!token)token=sessionStorage.getItem('truebeam-session')||'';if(location.hash)sessionStorage.setItem('truebeam-session',token);}catch{}
 if(location.hash)history.replaceState(null,'',location.pathname);
 let state=null,kind='screenshots',selected=null,loaded=false,lastJob='',pending=new Set(),polling=false;
-const labels={review:'Status',worker_initials:'Worker Initials',service_date:'Malfunction / event start',machine_release:'Machine release',machine:'Machine / asset',work_order:'Work order #',case_number:'Case #',category:'Category',fault_code:'Primary error code',additional_codes:'Additional error codes',fault_name:'Fault name',severity:'Severity',impact:'Impact',issue:'Subject / fault description',cause:'Cause',suggestions:'Vendor suggestions',work_performed:'Summary of work',parts_installed:'Parts installed',engineer:'Field engineer',work_hours:'Total work hours',downtime_hours:'Agreed downtime hours',service_status:'Service status',notes:'Follow-up / notes',document_type:'Document type'};
+const labels={review:'Status',worker_initials:'Worker Initials',service_date:'Malfunction / event start',machine_release:'Machine release',machine:'Machine / asset',work_order:'Work order #',case_number:'Case #',category:'Category',fault_code:'Primary error code',additional_codes:'Additional error codes',fault_name:'Fault name',severity:'Severity',impact:'Impact',issue:'Subject / fault description',cause:'Cause',suggestions:'Vendor suggestions',current_status:'Current status',work_performed:'Summary of work',parts_installed:'Parts installed',engineer:'Field engineer',work_hours:'Total work hours',downtime_hours:'Agreed downtime hours',service_status:'Service status',notes:'Follow-up / notes',document_type:'Document type'};
 function notice(text,error=false){$('notice').textContent=text;$('notice').className='notice show'+(error?' error':'');}
 async function api(path,body){const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'X-Local-Token':token,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});if(!response.ok){let message='Local request failed.';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}return response;}
 async function command(action,body={}){try{const data=await(await api(action,body)).json();pending.add(data.id);notice('Change queued. It will apply after the current folder scan finishes.');return data;}catch(error){notice(error.message,true);return null;}}
@@ -220,7 +229,7 @@ function cell(row,text,cls){const td=el('td',undefined,cls);if(text instanceof N
 
 const SORT_OPTIONS={
  reports:[['service_date','Start date','date'],['machine_release','Release date','date'],['work_order','Work order'],['case_number','Case number'],['category','Category'],['issue','Subject'],['work_performed','Summary of work'],['parts_installed','Parts installed'],['fault_code','Error code'],['engineer','Engineer'],['work_hours','Work hours','number'],['downtime_hours','Downtime hours','number'],['service_status','Status'],['sources','Source count','number']],
- screenshots:[['service_date','Event time','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','Varian Suggested Solution'],['work_performed','Resolution/Fix'],['worker_initials','Initials'],['service_status','Status'],['sources','Source count','number']]
+ screenshots:[['service_date','Event time','date'],['fault_code','Error code'],['fault_name','Fault name'],['severity','Severity'],['issue','Error Details'],['suggestions','Varian Suggested Solution'],['current_status','Current Status'],['work_performed','Final Resolution'],['worker_initials','Initials'],['service_status','Status'],['sources','Source count','number']]
 };
 let tableSort={reports:{key:'service_date',direction:'desc'},screenshots:{key:'service_date',direction:'desc'}};
 try{const saved=JSON.parse(localStorage.getItem('truebeam-table-sort'));for(const tab of Object.keys(tableSort))if(saved?.[tab]&&SORT_OPTIONS[tab].some(o=>o[0]===saved[tab].key)&&['asc','desc'].includes(saved[tab].direction))tableSort[tab]=saved[tab];}catch{}
@@ -239,12 +248,13 @@ function syncSortControls(){
  $('sort-direction').setAttribute('aria-label','Reverse sort direction');
  $('download-table').textContent=kind==='reports'?'Download service table':'Download fault table';
 }
-function fieldLabel(key,tab=kind){return tab==='screenshots'?({issue:'Error Details',suggestions:'Varian Suggested Solution',work_performed:'Resolution/Fix',worker_initials:'Initials',service_status:'Status'}[key]||labels[key]):labels[key];}
+function fieldLabel(key,tab=kind){return tab==='screenshots'?({issue:'Error Details',suggestions:'Varian Suggested Solution',current_status:'Current Status',work_performed:'Final Resolution',worker_initials:'Initials',service_status:'Status'}[key]||labels[key]):labels[key];}
 /* Fault status is Open until staff mark it Resolved; service reports fall back to their review status. */
 const FAULT_STATUSES=['Open','Resolved'];
 function statusValue(r){return r.kind==='screenshots'?(r.service_status==='Resolved'?'Resolved':'Open'):(r.service_status||r.review||'');}
+function exportStamp(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes());}
 function downloadDisplayedTable(){
- const keys=kind==='reports'?['service_date','machine_release','work_order','case_number','category','fault_code','additional_codes','issue','work_performed','parts_installed','engineer','work_hours','downtime_hours','service_status','notes']:['service_date','fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','service_status'];
+ const keys=kind==='reports'?['service_date','machine_release','work_order','case_number','category','fault_code','additional_codes','issue','work_performed','parts_installed','engineer','work_hours','downtime_hours','service_status','notes']:['service_date','fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','current_status','work_performed','worker_initials','service_status'];
  const records=displayedRecords(),rows=[['Entry ID',...keys.map(k=>fieldLabel(k)),'Source count','Source files','Import problems'],...records.map(r=>[r.id,...keys.map(k=>k==='service_status'?statusValue(r):(r[k]??'')),r.sources.length,r.sources.map(s=>s.path).join('\n'),sourceErrors(r).join('\n')])];
  const quote=v=>{let t=String(v??'');if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"';};
  const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
@@ -253,7 +263,7 @@ function downloadDisplayedTable(){
 }
 
 function inlineField(record,field,expanded=false){
- const long=['issue','work_performed','parts_installed','notes','cause','suggestions'].includes(field);
+ const long=['issue','work_performed','parts_installed','notes','cause','suggestions','current_status'].includes(field);
  if(long&&!expanded){
   const button=el('button',record[field]||'-','text-preview');button.type='button';button.title='Open '+fieldLabel(field,record.kind);button.setAttribute('aria-label','Open '+fieldLabel(field,record.kind)+' for entry '+record.id);
   button.onclick=()=>{let dialog=$('text-detail');if(!dialog){dialog=el('dialog');dialog.id='text-detail';const head=el('div',undefined,'dialog-head');head.append(el('h2','Full text'));const close=el('button','Done');close.type='button';close.onclick=()=>dialog.close();head.append(close);const body=el('div',undefined,'dialog-body');body.id='text-detail-body';dialog.append(head,body);document.body.append(dialog);}
@@ -314,14 +324,14 @@ const query=$('search').value.trim().toLowerCase(),filter=$('review-filter').val
 let visible=displayedRecords();syncSortControls();
  const table=$('head').closest('table');table.dataset.kind=kind;
  let cols=table.querySelector('colgroup');if(!cols){cols=el('colgroup');table.prepend(cols);}
- const widths=kind==='reports'?[10,10,7,12,8,15,9,9,5,8,7]:[9,8,12,16,17,15,7,7,9];
+ const widths=kind==='reports'?[10,10,7,12,8,15,9,9,5,8,7]:[8,7,10,14,14,12,12,6,9,8];
  cols.replaceChildren(...widths.map(width=>{const col=el('col');col.style.width=width+'%';return col;}));
-const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject','Error Codes','Summary of work','Parts installed','Engineer','Hours','Status','Service report']:['Event time','Error code','Fault name / severity','Error Details','Varian Suggested Solution','Resolution/Fix','Initials','Status','Screenshot'];
-$('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','fault_code','work_performed','parts_installed','engineer','work_hours','service_status','sources']:['service_date','fault_code','fault_name','issue','suggestions','work_performed','worker_initials','service_status','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
+const headers=kind==='reports'?['Start / release','Work order / case','Category','Subject','Error Codes','Summary of work','Parts installed','Engineer','Hours','Status','Service report']:['Event time','Error code','Fault name / severity','Error Details','Varian Suggested Solution','Current Status','Final Resolution','Initials','Status','Screenshot'];
+$('head').replaceChildren();const h=el('tr');const keys=kind==='reports'?['service_date','work_order','category','issue','fault_code','work_performed','parts_installed','engineer','work_hours','service_status','sources']:['service_date','fault_code','fault_name','issue','suggestions','current_status','work_performed','worker_initials','service_status','sources'];headers.forEach((t,i)=>{const th=el('th'),key=keys[i];if(key){const active=tableSort[kind].key===key;th.setAttribute('aria-sort',active?(tableSort[kind].direction==='asc'?'ascending':'descending'):'none');const b=el('button',t+' '+(active?(tableSort[kind].direction==='asc'?'↑':'↓'):'↕'),'sort-column');b.type='button';b.setAttribute('aria-label','Sort by '+t);b.onclick=()=>changeSort(key,active&&tableSort[kind].direction==='asc'?'desc':'asc');th.append(b);}h.append(th);});$('head').append(h);$('rows').replaceChildren();
 
 for(const record of visible){
  const tr=el('tr');tr.dataset.recordId=record.id;
- const groups=kind==='reports'?[['service_date','machine_release'],['work_order','case_number'],['category'],['issue'],['fault_code','additional_codes'],['work_performed'],['parts_installed'],['engineer'],['work_hours','downtime_hours'],['service_status']]:[['service_date'],['fault_code','additional_codes'],['fault_name','severity'],['issue'],['suggestions'],['work_performed'],['worker_initials'],['service_status']];
+ const groups=kind==='reports'?[['service_date','machine_release'],['work_order','case_number'],['category'],['issue'],['fault_code','additional_codes'],['work_performed'],['parts_installed'],['engineer'],['work_hours','downtime_hours'],['service_status']]:[['service_date'],['fault_code','additional_codes'],['fault_name','severity'],['issue'],['suggestions'],['current_status'],['work_performed'],['worker_initials'],['service_status']];
  for(const fields of groups){const container=el('div',undefined,'inline-group');if(fields.includes('work_hours'))container.append(compactFields(record,fields));
  else if(fields.includes('fault_code')){if(fields.includes('issue'))container.append(inlineField(record,'issue'));container.append(compactFields(record,['fault_code','additional_codes']));}
  else for(const field of fields){if(fields.length>1&&!String(record[field]||'').trim()&&fields.some(key=>String(record[key]||'').trim()))continue;container.append(inlineField(field==='service_status'&&record.kind==='reports'?{...record,service_status:record.service_status||record.review||''}:record,field));if(fields.every(key=>!String(record[key]||'').trim()))break;}if(fields.includes('review')&&sourceErrors(record).length)container.append(el('small',sourceErrors(record).join('; '),'secondary'));cell(tr,container);}
@@ -339,15 +349,15 @@ const log=state.last_log;const logLine=$('log-status');logLine.textContent=(stat
 $('folder-connection').textContent=state.folders_connected?'Connection Established':'Connect folders';$('folder-connection').classList.toggle('connected',Boolean(state.folders_connected));
 $('start').textContent=state.config.running?'Save folders & monitor':'Start monitoring';
 }
-async function poll(){if(polling)return;polling=true;try{state=await(await api('state')).json();for(const r of state.records){if(r.review==='Needs review')r.review='Closure documented';if(r.service_status==='Needs review')r.service_status='Closure documented';}if(!loaded){$('reports').value=state.config.reports||'';$('screenshots').value=state.config.screenshots||'';$('evening-email').checked=Boolean(state.config.evening_email);$('email-recipients').value=(state.config.email_recipients||[]).join('\n');$('email-time').value=state.config.email_time||'18:00';loaded=true;}
+async function poll(){if(polling)return;polling=true;try{state=await(await api('state')).json();for(const r of state.records){if(r.review==='Needs review')r.review='Closure documented';if(r.service_status==='Needs review')r.service_status='Closure documented';}if(!loaded){$('reports').value=state.config.reports||'';$('screenshots').value=state.config.screenshots||'';$('evening-email').checked=Boolean(state.config.evening_email);$('email-recipients').value=(state.config.email_recipients||[]).join('\n');$('email-time').value=state.config.email_time||'18:00';$('alert-recipients').value=(state.config.alert_recipients||[]).join('\n');loaded=true;}
 const mail=state.email_status;$('test-email').hidden=!mail;$('email-status').textContent=!mail?'Evening emails are sent by the Windows host application. This browser-only page saves the setting but cannot send email.':!mail.configured?'Email cannot be sent yet: '+(mail.problem||'set up Outlook or a mail server on the host.'):'Sends through '+mail.via+'. '+(mail.last_error?'Last attempt failed: '+mail.last_error+' · ':'')+(mail.last_sent_at?'Last evening email sent '+new Date(mail.last_sent_at).toLocaleString()+'.':'No evening email sent yet.');
 if(state.job&&state.job.id!==lastJob){lastJob=state.job.id;if(pending.has(lastJob)){pending.delete(lastJob);notice(state.job.message,!state.job.ok);}}
 render();}catch(error){notice('Cannot reach the local helper. Keep the launcher window open. '+error.message,true);}finally{polling=false;}}
 function chooseTab(next){kind=next;document.querySelectorAll('.tab').forEach(tab=>{const active=tab.dataset.kind===kind;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;});$('report-panel').setAttribute('aria-labelledby',kind==='reports'?'tab-reports':'tab-faults');render();}
 document.querySelectorAll('.tab').forEach(tab=>{tab.onclick=()=>chooseTab(tab.dataset.kind);tab.onkeydown=e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();chooseTab(kind==='reports'?'screenshots':'reports');document.querySelector('.tab[aria-selected=true]').focus();}};});
 function openDetail(id){selected=state.records.find(r=>r.id===id);if(!selected)return;$('detail-title').textContent=(selected.kind==='reports'?'Service report':'Fault report')+' #'+selected.id;$('detail-subtitle').textContent=selected.work_order||selected.fault_name||'Review extracted fields against the source';$('edit-grid').replaceChildren();
-const fields=selected.kind==='reports'?['work_order','case_number','service_date','machine_release','category','document_type','fault_code','additional_codes','engineer','work_hours','downtime_hours','service_status','issue','work_performed','parts_installed','notes']:['service_date','fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','work_performed','worker_initials','service_status'];
-for(const key of fields){const wide=['issue','work_performed','parts_installed','notes','cause','suggestions'].includes(key),faultStatus=key==='service_status'&&selected.kind==='screenshots';const wrap=el('div',undefined,wide?'wide':'');const label=el('label',key==='service_date'&&selected.document_type?.startsWith('PMP')?'Document date':fieldLabel(key,selected.kind));label.htmlFor='edit-'+key;const input=el(faultStatus?'select':wide?'textarea':'input');if(faultStatus)for(const value of FAULT_STATUSES)input.append(el('option',value));input.id='edit-'+key;input.name=key;input.value=faultStatus?statusValue(selected):selected[key]||'';if(key==='worker_initials'){input.placeholder='e.g. BK';input.maxLength=12;input.autocomplete='off';input.oninput=()=>{input.value=input.value.toUpperCase();};}wrap.append(label,input);$('edit-grid').append(wrap);}
+const fields=selected.kind==='reports'?['work_order','case_number','service_date','machine_release','category','document_type','fault_code','additional_codes','engineer','work_hours','downtime_hours','service_status','issue','work_performed','parts_installed','notes']:['service_date','fault_code','additional_codes','fault_name','severity','issue','cause','suggestions','current_status','work_performed','worker_initials','service_status'];
+for(const key of fields){const wide=['issue','work_performed','parts_installed','notes','cause','suggestions','current_status'].includes(key),faultStatus=key==='service_status'&&selected.kind==='screenshots';const wrap=el('div',undefined,wide?'wide':'');const label=el('label',key==='service_date'&&selected.document_type?.startsWith('PMP')?'Document date':fieldLabel(key,selected.kind));label.htmlFor='edit-'+key;const input=el(faultStatus?'select':wide?'textarea':'input');if(faultStatus)for(const value of FAULT_STATUSES)input.append(el('option',value));input.id='edit-'+key;input.name=key;input.value=faultStatus?statusValue(selected):selected[key]||'';if(key==='worker_initials'){input.placeholder='e.g. BK';input.maxLength=12;input.autocomplete='off';input.oninput=()=>{input.value=input.value.toUpperCase();};}wrap.append(label,input);$('edit-grid').append(wrap);}
 const wrap=el('div');const label=el('label','Review status');label.htmlFor='edit-review';const review=el('select');review.id='edit-review';review.name='review';for(const value of ['Closure documented','Reviewed']){const option=el('option',value);review.append(option);}review.value=selected.review;wrap.append(label,review);$('edit-grid').append(wrap);
 const warnings=sourceErrors(selected);if(!selected.fault_code&&selected.kind==='screenshots')warnings.push('Primary error code was not identified. Check the original screenshot.');if(selected.possible_duplicate)warnings.push('Other entries contain a similar fault. Confirm the event times before linking.');$('detail-warning').textContent=warnings.join('\n');$('detail-warning').hidden=!warnings.length;
 $('raw').textContent=selected.text||'No text extracted.';$('source-list').replaceChildren();for(const source of selected.sources){const block=el('div',undefined,'source');const button=el('button','Open source file','link');button.type='button';button.onclick=()=>openSource(source.id);block.append(button,el('small',source.path));$('source-list').append(block);}
@@ -365,8 +375,11 @@ $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),sc
 $('save-email').onclick=async()=>{const enabled=$('evening-email').checked,recipients=[...new Set($('email-recipients').value.split(/[\s,;]+/).filter(Boolean))];const invalid=recipients.filter(address=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address));
  if(invalid.length)return notice('Check these email addresses: '+invalid.join(', '),true);if(enabled&&!recipients.length)return notice('Add at least one email address to send the evening email.',true);
  try{const result=await(await api('email-settings',{enabled,recipients,time:$('email-time').value||'18:00'})).json();if(result.error)throw new Error(result.error);$('email-recipients').value=recipients.join('\n');notice('Evening email '+(enabled?'on':'off')+' · '+recipients.length+' recipient'+(recipients.length===1?'':'s')+' saved.');await poll();}catch(error){notice(error.message,true);}};
+$('save-alerts').onclick=async()=>{const recipients=[...new Set($('alert-recipients').value.split(/[\s,;]+/).filter(Boolean))],invalid=recipients.filter(address=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address));
+ if(invalid.length)return notice('Check these email addresses: '+invalid.join(', '),true);
+ try{const result=await(await api('alert-settings',{recipients})).json();if(result.error)throw new Error(result.error);$('alert-recipients').value=recipients.join('\n');notice('Downtime alert recipients saved · '+recipients.length+' address'+(recipients.length===1?'':'es')+'.');await poll();}catch(error){notice(error.message,true);}};
 $('test-email').onclick=async()=>{const button=$('test-email');button.disabled=true;notice('Sending test email with the saved recipients…');try{const result=await(await api('email-test',{})).json();if(result.error)throw new Error(result.error);notice('Test email sent to '+result.recipients+' recipient'+(result.recipients===1?'':'s')+' with '+result.entries+' new entr'+(result.entries===1?'y':'ies')+'.');}catch(error){notice(error.message,true);}finally{button.disabled=false;}};
-$('excel').onclick=async()=>{notice('Downloading the latest completed Excel export. Entries from a scan in progress will appear in the next export.');await download('excel','TrueBeam Service Log.xlsx');};
+$('excel').onclick=async()=>{notice('Exporting the log to Downloads…');await download('excel','TrueBeam_Service_Log_'+exportStamp()+'.xlsx');};
 
 document.querySelectorAll('.browse').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await(await api('browse',{kind:button.dataset.for})).json();if(result.path)$(button.dataset.for).value=result.path;}catch(error){notice(error.message,true);}finally{button.disabled=false;}});
 if(location.protocol==='file:'||!token){$('launcher').hidden=false;$('workspace').hidden=true;}else{poll();setInterval(poll,2000);}

@@ -61,12 +61,12 @@ class NativeTests(unittest.TestCase):
                       dict(kind='screenshots',service_date='2026-10-15T12:00:00',fault_code='420220',sources=[])],self.output)
         wb=load_workbook(self.output);ws=wb['Fault Reports']
         columns=[c.value for c in ws[4]]
-        self.assertEqual(columns[6:],['Varian Suggested Solution','Resolution/Fix','Initials','Status','Screenshot'])
-        self.assertEqual(ws.cell(5,columns.index('Resolution/Fix')+1).value,'Reset connection')
+        self.assertEqual(columns[6:],['Varian Suggested Solution','Current Status','Final Resolution','Initials','Status','Screenshot'])
+        self.assertEqual(ws.cell(5,columns.index('Final Resolution')+1).value,'Reset connection')
         resolved,unset=ws.cell(5,columns.index('Status')+1),ws.cell(6,columns.index('Status')+1)
         self.assertEqual((resolved.value,unset.value),('Resolved','Open'))
         self.assertEqual(resolved.fill.fgColor.rgb[-6:],'CDEED6');self.assertEqual(unset.fill.fgColor.rgb[-6:],'FDE2C4')
-        self.assertEqual(ws.cell(5,1).font.sz,12)
+        self.assertEqual(ws.cell(5,1).font.sz,14)
         for sheet in wb.worksheets:
             self.assertEqual(sheet.page_setup.orientation,'landscape');self.assertEqual(sheet.page_setup.fitToWidth,1)
             self.assertTrue(sheet.sheet_properties.pageSetUpPr.fitToPage)

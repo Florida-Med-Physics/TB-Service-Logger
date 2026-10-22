@@ -1,5 +1,5 @@
 /* Browser-only local database, folder access, extraction and export. */
-const LOCAL_FIELDS=['service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type','worker_initials'];
+const LOCAL_FIELDS=['service_date','machine','fault_code','additional_codes','fault_name','severity','impact','issue','cause','suggestions','work_performed','service_status','notes','work_order','case_number','machine_release','category','parts_installed','engineer','work_hours','downtime_hours','document_type','worker_initials','current_status'];
 const browserStore={db:null,handles:{reports:null,screenshots:null},config:{reports:'',screenshots:'',running:false},busy:false,message:'Open Folder settings to connect service report, screenshot, and Logs folders.',last_scan:null,job:null,seen:new Map(),timer:null,worker:null,pdf:null,records:[]};
 const supported=/\.(pdf|docx|txt|png|jpe?g|bmp|webp)$/i;
 function binaryAsset(name){return Uint8Array.from(atob(EMBEDDED[name]),c=>c.charCodeAt(0));}
@@ -8,6 +8,7 @@ async function openLocalDatabase(){
  browserStore.db=await new Promise((resolve,reject)=>{const req=indexedDB.open('truebeam-standalone-v1',1);req.onupgradeneeded=()=>{const db=req.result;const records=db.createObjectStore('records',{keyPath:'id',autoIncrement:true});records.createIndex('key','key',{unique:true});db.createObjectStore('settings');};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
  for(const kind of ['reports','screenshots']){const handle=await dbGet('settings',kind);if(handle){browserStore.handles[kind]=handle;browserStore.config[kind]=handle.name;}}
  const email=await dbGet('settings','email');if(email){browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;browserStore.config.email_time=email.time;}
+ const alertList=await dbGet('settings','alert-recipients');if(alertList)browserStore.config.alert_recipients=alertList;
  if(browserStore.handles.reports&&browserStore.handles.screenshots)browserStore.message='Folders remembered. Start monitoring to resume; grant access if prompted.';
  await refreshLocalRecords();
 }
@@ -251,6 +252,7 @@ async function localApi(route,body){
   const email={enabled:Boolean(body.enabled),recipients:(body.recipients||[]).map(String),time:String(body.time||'18:00')};await dbPut('settings',email,'email');
   browserStore.config.evening_email=email.enabled;browserStore.config.email_recipients=email.recipients;browserStore.config.email_time=email.time;return new Response(JSON.stringify({ok:true}));
  }
+ if(route==='alert-settings'){const list=(body.recipients||[]).map(String);await dbPut('settings',list,'alert-recipients');browserStore.config.alert_recipients=list;return new Response(JSON.stringify({ok:true}));}
  if(route==='pause'){browserStore.config.running=false;browserStore.stopRequested=true;browserStore.message='Monitoring paused. Existing entries remain saved.';return new Response(JSON.stringify(scheduleAction(route,body,async()=>{})));}
  if(route==='scan'||route==='retry'){
   if(browserStore.busy)throw new Error('A folder scan is already running. Please wait for it to finish.');

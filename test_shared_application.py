@@ -90,13 +90,44 @@ class SharedTests(unittest.TestCase):
   import evening_email
   rid=self.fault()
   self.assertTrue(json.load(self.call('inline-update',{'id':rid,'field':'service_status','value':'Resolved','expected':''}))['ok'])
+  self.assertTrue(json.load(self.call('inline-update',{'id':rid,'field':'current_status','value':'Waiting on field engineer','expected':''}))['ok'])
   records=self.service.state()['records'];self.assertEqual(records[0]['service_status'],'Resolved')
   other=dict(id=99,kind='screenshots',service_date='2026-10-15T10:00:00',issue='Other fault',sources=[])
   message=evening_email.build_message(records+[other],records+[other],['physics@example.org'],'',datetime(2026,10,15,18,0),datetime(2026,10,16,18,0))
   body=message.get_body(('plain',)).get_content();page=message.get_body(('html',)).get_content()
   self.assertIn('Status: Resolved',body);self.assertIn('Status: Open',body)
-  self.assertIn('Varian Suggested Solution',body);self.assertIn('Resolution/Fix',body);self.assertIn('Initials: BK',body)
+  self.assertIn('Varian Suggested Solution',body);self.assertIn('Final Resolution',body);self.assertIn('Current Status: Waiting on field engineer',body);self.assertIn('Initials: BK',body)
   self.assertIn('background:#CDEED6',page);self.assertIn('background:#FDE2C4',page)
+ def test_downtime_alert_sends_scripted_email_and_refuses_identifiers(self):
+  runs=[]
+  def fake_run(command,**options):
+   runs.append(json.loads(Path(command[-1]).read_text(encoding='utf-8')))
+   return type('Result',(),{'returncode':0,'stderr':''})()
+  self.service.environ={};self.service.outlook_check=lambda:True
+  self.call('email-settings',{'enabled':False,'recipients':['evening@example.org']}).read()
+  self.call('alert-settings',{'recipients':['physics@example.org','therapy@example.org','physics@example.org']}).read()
+  self.call('configure',{'reports':self.defaults['reports'],'screenshots':self.defaults['screenshots']}).read()
+  config=json.load(self.call('state'))['config']
+  self.assertEqual(config['alert_recipients'],['physics@example.org','therapy@example.org']);self.assertEqual(config['email_recipients'],['evening@example.org'])
+  with self.assertRaises(HTTPError):self.call('alert-settings',{'recipients':['not-an-address']})
+  alert={'site':'Truebeam','status':'Machine down','started':'2026-09-12T10:00','issue':'Synthetic MLC trajectory error','details':'Synthetic fault after QA.',
+         'vendor':'Varian helpline called, case # 00000000','patient_impact':'2 patients moved to another machine','plan':'Field engineer contacted','physics_impact':'No PSQA until back up','reported_by':'bk'}
+  with patch('evening_email.subprocess.run',fake_run):
+   self.assertEqual(json.load(self.call('downtime-alert',alert))['recipients'],2)
+   with self.assertRaises(HTTPError) as error:self.call('downtime-alert',{**alert,'patient_impact':'MRN 0000000 moved'})
+   self.service.now=lambda:datetime(2026,9,12,14,30)
+   self.call('downtime-alert',{'status':'Machine down','recipients':'oncall@example.org; physics@example.org'}).read()
+   with self.assertRaises(HTTPError) as bad:self.call('downtime-alert',{'status':'Machine down','recipients':'not-an-address'})
+  self.assertIn('Patient Impact',json.load(error.exception)['error']);self.assertIn('not-an-address',json.load(bad.exception)['error']);self.assertEqual(len(runs),2)
+  self.assertEqual(runs[0]['subject'],'DOWNTIME ALERT: Truebeam 9/12 @10am');self.assertEqual(runs[0]['to'],'physics@example.org; therapy@example.org')
+  self.assertEqual(runs[1]['subject'],'DOWNTIME ALERT: Truebeam 9/12 @2:30pm');self.assertEqual(runs[1]['to'],'oncall@example.org; physics@example.org')
+  for text in ('Vendor Actions to Date','Patient Impact','Plan Going Forward','Physics Impact','09/12/2026 10:00','BK'):self.assertIn(text,runs[0]['html'])
+ def test_export_report_downloads_current_log(self):
+  from io import BytesIO
+  from openpyxl import load_workbook
+  self.fault()
+  wb=load_workbook(BytesIO(self.call('excel').read()));ws=wb['Fault Reports']
+  self.assertEqual(ws.cell(5,[c.value for c in ws[4]].index('Error Details')+1).value,'MLC fault')
  def test_two_clients_merge_different_fields_and_reject_same_field_conflict(self):
   rid=self.fault()
   with ThreadPoolExecutor() as pool:

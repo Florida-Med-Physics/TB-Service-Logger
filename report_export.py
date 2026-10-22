@@ -17,7 +17,7 @@ FAULT=[
  ('service_date','Event Date',20),('fault_code','Error Code',15),
  ('additional_codes','Additional Error Codes',18),('fault_name','Fault Name',32),
  ('severity','Severity',14),('issue','Error Details',70),
- ('suggestions','Varian Suggested Solution',70),('work_performed','Resolution/Fix',50),
+ ('suggestions','Varian Suggested Solution',60),('current_status','Current Status',45),('work_performed','Final Resolution',50),
  ('worker_initials','Initials',10),('service_status','Status',12),('sources','Screenshot',32)]
 # Fault status is Open until staff mark it Resolved; each value prints with its own color.
 STATUS_STYLE={'Open':('FDE2C4','7A3300'),'Resolved':('CDEED6','0F5128')}
@@ -35,15 +35,15 @@ def write_report(records,output,*,overwrite=True):
     wb=Workbook();wb.remove(wb.active)
     for kind,title,columns in [('reports','Service Reports',SERVICE),('screenshots','Fault Reports',FAULT)]:
         ws=wb.create_sheet(title);ws.sheet_view.showGridLines=False
-        ws.append(['TrueBeam — '+title]);ws['A1'].font=Font(name='Arial',size=16,bold=True)
+        ws.append(['TrueBeam — '+title]);ws['A1'].font=Font(name='Arial',size=20,bold=True)
         ws.append(['Updated '+datetime.now().strftime('%m/%d/%Y %H:%M')+'. Saved from the application database.'])
-        ws['A2'].font=Font(name='Arial',size=11,color='595959')
+        ws['A2'].font=Font(name='Arial',size=12,color='595959')
         ws.append([]);ws.append([item[1] for item in columns])
         for cell in ws[4]:
-            cell.font=Font(name='Arial',size=12,bold=True,color='FFFFFF')
+            cell.font=Font(name='Arial',size=14,bold=True,color='FFFFFF')
             cell.fill=PatternFill('solid',fgColor='1F4E78')
             cell.alignment=Alignment(wrap_text=True,vertical='top')
-        ws.row_dimensions[4].height=36
+        ws.row_dimensions[4].height=42
         rows=[r for r in records if r['kind']==kind]
         rows.sort(key=lambda r:str(date_value(r.get('service_date',''))),reverse=True)
         for record in rows:
@@ -61,20 +61,20 @@ def write_report(records,output,*,overwrite=True):
             ws.append(values)
             for col,cell in enumerate(ws[ws.max_row]):
                 if isinstance(cell.value,str):cell.data_type='s'
-                cell.font=Font(name='Arial',size=12)
+                cell.font=Font(name='Arial',size=14)
                 cell.alignment=Alignment(wrap_text=True,vertical='top')
                 cell.border=Border(bottom=Side(style='thin',color='D9E2F3'))
                 if isinstance(cell.value,datetime):cell.number_format='mm/dd/yyyy hh:mm'
                 if kind=='screenshots' and columns[col][0]=='service_status':
                     fill,color=STATUS_STYLE[cell.value]
-                    cell.fill=PatternFill('solid',fgColor=fill);cell.font=Font(name='Arial',size=12,bold=True,color=color)
+                    cell.fill=PatternFill('solid',fgColor=fill);cell.font=Font(name='Arial',size=14,bold=True,color=color)
                     cell.alignment=Alignment(horizontal='center',vertical='top')
             # Height accounts for wrapped descriptions; full text remains in cells.
-            ws.row_dimensions[ws.max_row].height=min(400,max(70,max((len(str(v))//50+1)*17 for v in values)))
+            ws.row_dimensions[ws.max_row].height=min(409,max(80,max((len(str(v))//42+1)*20 for v in values)))
             if record['sources']:
                 link=ws.cell(ws.max_row,len(columns))
                 link.hyperlink=Path(record['sources'][0]['path']).absolute().as_uri()
-                link.font=Font(name='Arial',size=12,color='0563C1',underline='single')
+                link.font=Font(name='Arial',size=14,color='0563C1',underline='single')
         ws.freeze_panes='A5'
         ws.auto_filter.ref='A4:'+get_column_letter(len(columns))+str(max(4,ws.max_row))
         for i,(_,_,width) in enumerate(columns,1):ws.column_dimensions[get_column_letter(i)].width=width

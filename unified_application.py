@@ -1,10 +1,10 @@
 """One HTML interface, displayed in a dedicated Windows or Mac app window."""
 import argparse,base64,json,os,queue,re,sys,tempfile,time
 from pathlib import Path
-from PySide6.QtCore import QObject,Signal,Slot,QFile,QIODevice,QUrl,QTimer,QSettings
+from PySide6.QtCore import QObject,Signal,Slot,QFile,QIODevice,QUrl,QTimer,QSettings,QStandardPaths
 from PySide6.QtGui import QIcon,QDesktopServices
 from PySide6.QtWidgets import QApplication,QMainWindow,QFileDialog,QMessageBox
-from PySide6.QtWebEngineCore import QWebEnginePage,QWebEngineProfile,QWebEngineScript,QWebEngineSettings
+from PySide6.QtWebEngineCore import QWebEngineDownloadRequest,QWebEnginePage,QWebEngineProfile,QWebEngineScript,QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from native_application import Backend,Api,Task
@@ -18,7 +18,7 @@ class Bridge(QObject):
         super().__init__(window);self.window=window
     @Slot(str,str,str)
     def request(self,route,payload,request_id):
-        allowed={'state','inline-update','add-fault','upload','configure','pause','scan','retry','export','excel','email-settings','email-test'}
+        allowed={'state','inline-update','add-fault','upload','configure','pause','scan','retry','export','excel','email-settings','email-test','downtime-alert','alert-settings'}
         if route not in allowed:
             self.reply.emit(request_id,json.dumps({'error':'Unsupported application request.'}));return
         def work():
@@ -112,9 +112,16 @@ window.truebeamNativeRequest=async(route,body)=>{
         if error:self.last_error=error;QMessageBox.warning(self,'TrueBeam Service Log',error);return
         self.api=Api(url);self.view.load(QUrl.fromLocalFile(str(BASE/'standalone'/'TrueBeam-Local.html')))
     def download(self,request):
-        filename,_=QFileDialog.getSaveFileName(self,'Save report',request.suggestedFileName())
-        if not filename:request.cancel();return
-        path=Path(filename);request.setDownloadDirectory(str(path.parent));request.setDownloadFileName(path.name);request.accept()
+        # Exports go straight to the Downloads folder; an existing file is never replaced.
+        folder=Path(QStandardPaths.writableLocation(QStandardPaths.DownloadLocation) or Path.home()/'Downloads');folder.mkdir(parents=True,exist_ok=True)
+        path=folder/Path(request.suggestedFileName() or 'TrueBeam export').name;stem,suffix,n=path.stem,path.suffix,1
+        while path.exists():path=folder/(stem+' ('+str(n)+')'+suffix);n+=1
+        request.setDownloadDirectory(str(folder));request.setDownloadFileName(path.name)
+        def finished():
+            done=request.state()==QWebEngineDownloadRequest.DownloadState.DownloadCompleted
+            self.page.runJavaScript('notice('+json.dumps(('Saved to Downloads: ' if done else 'Download failed: ')+str(path))+','+('false' if done else 'true')+')')
+        request.isFinishedChanged.connect(finished)
+        request.accept()
     def closeEvent(self,event):
         if self.backend.host and not self.backend.local:
             if QMessageBox.question(self,'Close shared host?','This computer is hosting the shared log. Closing it disconnects other users until the app is launched again. Close?',QMessageBox.Yes|QMessageBox.No,QMessageBox.No)!=QMessageBox.Yes:event.ignore();return
@@ -149,7 +156,7 @@ def main():
         checked={};deadline=time.monotonic()+15
         while time.monotonic()<deadline and not checked.get('rows'):
             app.processEvents();window.page.runJavaScript('JSON.stringify(window.__verified||{})',lambda value:checked.update(json.loads(value)) if value else None);time.sleep(.05)
-        assert checked.get('rows')==1 and 'Resolution' in checked.get('headers','') and 'Status' not in checked['headers'],(checked,window.page.messages)
+        assert checked.get('rows')==1 and all(h in checked.get('headers','') for h in ('Varian Suggested Solution','Current Status','Final Resolution','Initials','Status')),(checked,window.page.messages)
         result['data_roundtrip']=True
         manifest=json.loads((BASE/'standalone'/'ui-manifest.json').read_text())
         assert result['ui']==manifest['ui_sha256']

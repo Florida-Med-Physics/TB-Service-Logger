@@ -33,9 +33,9 @@ async function initShared(){
  $('reports').value=state.config.reports;$('screenshots').value=state.config.screenshots;
  $('start').onclick=()=>command('configure',{reports:$('reports').value.trim(),screenshots:$('screenshots').value.trim(),logs:logsInput.value.trim()});
  if(!state.admin){
-  for(const node of [$('reports'),$('screenshots'),logsInput,$('email-recipients'),$('email-time')])node.readOnly=true;
-  for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry'),logsChoose,$('evening-email'),$('save-email'),$('test-email')]){button.disabled=true;button.title='Host administrator only';}
+  for(const node of [$('reports'),$('screenshots'),logsInput,$('email-recipients'),$('email-time'),$('alert-recipients')])node.readOnly=true;
+  for(const button of [...document.querySelectorAll('.browse'),$('start'),$('pause'),$('retry'),logsChoose,$('evening-email'),$('save-email'),$('test-email'),$('save-alerts')]){button.disabled=true;button.title='Host administrator only';}
  }
- $('excel').onclick=async()=>{try{const result=await(await api('export',{})).json();if(result.error)throw new Error(result.error);await poll();notice('A new timestamped Excel log was saved to the Logs folder.');}catch(e){notice('Export Report failed: '+e.message,true);}};
+ $('excel').onclick=()=>{notice('Exporting the log to Downloads…');download('excel','TrueBeam_Service_Log_'+exportStamp()+'.xlsx');};
  setInterval(poll,2000);
 }

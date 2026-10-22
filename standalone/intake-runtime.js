@@ -83,13 +83,73 @@ function showImportDetails(){
  if(!browserStore.records.length)body.append(el('p','No entries yet. Choose folders and start monitoring, or use Import files.'));
  if(!dialog.open)dialog.showModal();
 }
+/* Send Downtime Alert: a scripted email prefilled from the newest open fault. Patient identifiers are never prefilled. */
+const DOWNTIME_FIELDS=[['recipients','To (email addresses)','text'],['site','Site/Machine','text'],['status','Machine status','select'],['started','Down since','datetime-local'],['issue','Issue','text'],['details','What happened','textarea'],['vendor','Vendor Actions to Date','textarea'],['patient_impact','Patient Impact','textarea'],['plan','Plan Going Forward','textarea'],['physics_impact','Physics Impact','textarea'],['reported_by','Reported by (initials)','text']];
+const DOWNTIME_HINTS={recipients:'name@ufl.edu, name2@ufl.edu',patient_impact:'How many patients are affected and where they were moved. No names, MRNs or birth dates.',plan:'e.g. Field engineer contacted; expected onsite time',physics_impact:'e.g. No PSQA can be run until the machine is back up',vendor:'e.g. Varian helpline called, case # ____; remote session',details:'What was running, the error shown, and what was tried'};
+function downtimeAlertButton(){
+ const button=el('button');button.id='downtime-alert';button.type='button';button.className='downtime-alert';
+ button.innerHTML='<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-3px;margin-right:6px"><path fill="#d92d20" d="M12 2 1 21h22L12 2z"/><path fill="#fff" d="M11 9h2v6h-2zm0 8h2v2h-2z"/></svg>Send Downtime Alert';
+ const {dialog,body}=intakeDialog('downtime-dialog','Send Downtime Alert');
+ const form=el('form');const grid=el('div',undefined,'edit-grid');const controls={};
+ for(const [key,label,type] of DOWNTIME_FIELDS){
+  const wrap=el('div',undefined,type==='textarea'||key==='recipients'?'wide':''),labelNode=el('label',label),control=el(type==='textarea'||type==='select'?type:'input');
+  labelNode.htmlFor='downtime-'+key;control.id='downtime-'+key;control.name=key;if(type==='text'||type==='datetime-local')control.type=type;if(type==='textarea')control.rows=3;
+  if(type==='select')for(const value of ['Machine down','Limited use','Back in service'])control.append(el('option',value));
+  if(DOWNTIME_HINTS[key])control.placeholder=DOWNTIME_HINTS[key];
+  if(key==='reported_by'){control.maxLength=12;control.oninput=()=>control.value=control.value.toUpperCase();}
+  controls[key]=control;wrap.append(labelNode,control);grid.append(wrap);
+ }
+ const warning=el('p','Do not include patient names, MRNs or birth dates. Describe patient impact in numbers only.','warning');
+ const to=el('p',undefined,'sub'),feedback=el('p');feedback.setAttribute('role','status');
+ const send=el('button','Send alert','primary');send.type='submit';
+ const mail=el('button','Open in email app');mail.type='button';
+ const buttons=el('div',undefined,'controls');buttons.append(send,mail);form.append(warning,grid,to,feedback,buttons);body.append(form);
+ const values=()=>Object.fromEntries(new FormData(form));
+ const recipients=()=>String(controls.recipients.value||'').split(/[\s,;]+/).filter(Boolean);
+ // Same header as the host email: DOWNTIME ALERT: Truebeam 9/12 @10am
+ const subject=data=>{const d=data.started?new Date(data.started):new Date(),h=d.getHours()%12||12;return 'DOWNTIME ALERT: '+(data.site||'Truebeam')+' '+(d.getMonth()+1)+'/'+d.getDate()+' @'+h+(d.getMinutes()?':'+String(d.getMinutes()).padStart(2,'0'):'')+(d.getHours()<12?'am':'pm');};
+ const text=data=>[subject(data),''].concat(...DOWNTIME_FIELDS.filter(([key])=>key!=='recipients').map(([key,label])=>[label+':',key==='started'&&data[key]?new Date(data[key]).toLocaleString():(data[key]||'-'),''])).join('\n');
+ button.onclick=()=>{
+  form.reset();feedback.textContent='';
+  // Prefill only from a console screenshot fault captured today (therapist entries and older faults are skipped).
+  const today=new Date().toDateString();
+  const fault=(state?.records||[]).filter(r=>r.kind==='screenshots'&&r.entryType!=='manual'&&r.document_type!=='Therapist entry'&&parsedDate(r.service_date)!==null&&new Date(parsedDate(r.service_date)).toDateString()===today).sort((a,b)=>parsedDate(b.service_date)-parsedDate(a.service_date))[0];
+  const local=d=>new Date(d-new Date(d).getTimezoneOffset()*60000).toISOString().slice(0,16);
+  controls.recipients.value=(state?.config?.alert_recipients||[]).join(', ');
+  controls.site.value='Truebeam';
+  controls.started.value=local(fault&&parsedDate(fault.service_date)||Date.now());
+  if(fault){
+   const codes=[fault.fault_code,fault.additional_codes].filter(Boolean).join(', ');
+   controls.issue.value=[fault.fault_name||String(fault.issue||'').split('\n')[0],codes&&'(error '+codes+')'].filter(Boolean).join(' ');
+   controls.details.value=[fault.issue,fault.current_status&&'Current status: '+fault.current_status,fault.work_performed&&'Troubleshooting so far: '+fault.work_performed].filter(Boolean).join('\n\n');
+   if(fault.worker_initials)controls.reported_by.value=String(fault.worker_initials).split('\n')[0];
+  }
+  const mailStatus=state?.email_status;
+  to.textContent=!mailStatus?'This copy cannot send email. Use Open in email app.':mailStatus.configured?'Sent from the host through '+mailStatus.via+'. Separate addresses with commas. The saved list is in Folder settings > Downtime alert recipients.':'Host email is not set up: use Open in email app.';
+  send.disabled=!mailStatus||!mailStatus.configured;
+  dialog.showModal();
+ };
+ mail.onclick=()=>{
+  const data=values();
+  location.href='mailto:'+encodeURIComponent(recipients().join(';'))+'?subject='+encodeURIComponent(subject(data))+'&body='+encodeURIComponent(text(data));
+ };
+ form.onsubmit=async event=>{
+  event.preventDefault();send.disabled=true;feedback.textContent='Sending…';
+  try{const result=await(await api('downtime-alert',values())).json();if(result.error)throw new Error(result.error);dialog.close();notice('Downtime alert sent to '+result.recipients+' recipient'+(result.recipients===1?'':'s')+'.');}
+  catch(e){feedback.textContent='Not sent: '+e.message;}finally{send.disabled=false;}
+ };
+ return button;
+}
 async function initIntake(){
  const actions=document.querySelector('.exports');
- const importButton=el('button','Import Varian work orders');importButton.id='import-files';
+ // Manual work-order import lives in Folder settings; the toolbar slot is the downtime alert.
+ const importButton=el('button','Import Varian work orders…');importButton.id='import-files';importButton.type='button';
  const input=el('input');input.type='file';input.multiple=true;input.accept='.pdf';input.hidden=true;input.id='import-file-input';
  importButton.onclick=()=>input.click();input.onchange=async()=>{try{const files=[...input.files];if(files.some(file=>!file.name.toLowerCase().endsWith('.pdf')))throw new Error('Select Varian work order PDF files only.');await importSelectedFiles(files);}catch(e){notice(e.message,true);}finally{input.value='';}};
+ const importRow=el('div');importRow.style.marginTop='15px';importRow.append(el('label','Varian work orders'),importButton,input,el('p','Import work order PDFs by hand if a file was missed by folder monitoring.','sub'));
+ $('folder-dialog').querySelector('.dialog-body').append(importRow);
  const add=el('button','Add fault','primary');add.id='add-fault';
- actions.prepend(add,importButton,input);
+ actions.prepend(add,downtimeAlertButton());
  const {dialog,body}=intakeDialog('therapist-fault','Add therapist fault');
  const form=el('form');form.id='therapist-fault-form';const grid=el('div',undefined,'edit-grid');
  for(const [key,label,type] of [['service_date','Event date / time','datetime-local'],['worker_initials','Therapist initials','text'],['fault_code','Error code (if known)','text'],['fault_name','Fault name (if known)','text'],['issue','Error Details','textarea'],['work_performed','Resolution (if fixed)','textarea']]){

@@ -18,7 +18,7 @@ $mail.Send();$session.SendAndReceive($false)
 Start-Sleep -Seconds 8
 '''
 # The app's table columns (index.html). Screenshots and file paths are never sent; only the source count.
-FAULT_COLUMNS=[('service_date','Event time'),('fault_code','Error code'),('additional_codes','Additional codes'),('fault_name','Fault name'),('severity','Severity'),('issue','Error Details'),('suggestions','Varian Suggested Solution'),('work_performed','Resolution/Fix'),('worker_initials','Initials'),('service_status','Status'),('sources','Source count')]
+FAULT_COLUMNS=[('service_date','Event time'),('fault_code','Error code'),('additional_codes','Additional codes'),('fault_name','Fault name'),('severity','Severity'),('issue','Error Details'),('suggestions','Varian Suggested Solution'),('current_status','Current Status'),('work_performed','Final Resolution'),('worker_initials','Initials'),('service_status','Status'),('sources','Source count')]
 SERVICE_COLUMNS=[('service_date','Start date'),('machine_release','Release date'),('work_order','Work order'),('case_number','Case number'),('category','Category'),('issue','Subject'),('work_performed','Summary of work'),('parts_installed','Parts installed'),('fault_code','Error code'),('engineer','Engineer'),('work_hours','Work hours'),('downtime_hours','Downtime hours'),('service_status','Status'),('sources','Source count')]
 # OCR text from console screenshots can pick up the patient banner; withhold any cell that looks like it does.
 PATIENT_TEXT=re.compile(r'\b(patient|pt\.? ?name|mrn|medical record|d\.?o\.?b\.?|date of birth|birth ?date)\b',re.I)
@@ -113,7 +113,61 @@ def build_message(records,all_records,recipients,sender,since,now,test=False):
                 fill,color=STATUS_STYLE[value]
                 return '<td style="border:1px solid #cad7e0;padding:5px 8px;vertical-align:top;font-weight:bold;background:#'+fill+';color:#'+color+'">'+html.escape(value)+'</td>'
             return '<td '+cell+'>'+html.escape(value)+'</td>'
-        body.append('<table style="border-collapse:collapse;font-family:Arial;font-size:13px"><tr>'+''.join('<th '+cell+'>'+html.escape(label)+'</th>' for _,label in columns)+'</tr>'+''.join('<tr>'+''.join(td(key,value) for (key,_),value in zip(columns,row))+'</tr>' for row in rows)+'</table>')
+        body.append('<table style="border-collapse:collapse;font-family:Arial;font-size:15px"><tr>'+''.join('<th '+cell+'>'+html.escape(label)+'</th>' for _,label in columns)+'</tr>'+''.join('<tr>'+''.join(td(key,value) for (key,_),value in zip(columns,row))+'</tr>' for row in rows)+'</table>')
+    text.append(footer);body.append('<p style="font-family:Arial;color:#555;font-size:12px">'+html.escape(footer)+'</p>')
+    message=EmailMessage();message['Subject']=subject;message['To']=', '.join(recipients)
+    if sender:message['From']=sender
+    message.set_content('\n'.join(text));message.add_alternative('<html><body>'+''.join(body)+'</body></html>',subtype='html')
+    return message
+
+# Downtime alert sections, in the order therapists and physics expect to read them.
+DOWNTIME_SECTIONS=[('site','Site/Machine'),('status','Machine status'),('started','Down since'),('issue','Issue'),('details','What happened'),
+                   ('vendor','Vendor Actions to Date'),('patient_impact','Patient Impact'),('plan','Plan Going Forward'),('physics_impact','Physics Impact'),('reported_by','Reported by')]
+DOWNTIME_STATUSES=('Machine down','Limited use','Back in service')
+# Patient names cannot be detected reliably; refuse obvious identifiers and remind staff in the form.
+ALERT_PHI=re.compile(r'\b(mrn|medical record|d\.?o\.?b\.?|date of birth|birth ?date|pt\.? ?name|patient name|patient id)\b',re.I)
+
+ADDRESS=re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+def alert_recipients(value,default):
+    """Addresses typed in the alert form (comma, semicolon or line separated); the saved list when blank."""
+    items=value if isinstance(value,list) else re.split(r'[\s,;]+',str(value or ''))
+    addresses=list(dict.fromkeys(a.strip() for a in items if a and a.strip())) or list(default)
+    if not addresses:raise ValueError('Enter at least one email address to send the alert to.')
+    invalid=[a for a in addresses if not ADDRESS.match(a)]
+    if invalid:raise ValueError('Check these email addresses: '+', '.join(invalid))
+    if len(addresses)>25:raise ValueError('Send the alert to 25 addresses or fewer.')
+    return addresses
+
+def alert_time(when):
+    """9/12 @10am, or 9/12 @10:30am."""
+    hour=when.hour%12 or 12
+    return str(when.month)+'/'+str(when.day)+' @'+str(hour)+(':%02d'%when.minute if when.minute else '')+('am' if when.hour<12 else 'pm')
+
+def downtime_fields(payload):
+    fields={key:str(payload.get(key,'')).strip()[:4000] for key,_ in DOWNTIME_SECTIONS}
+    if fields['status'] not in DOWNTIME_STATUSES:raise ValueError('Choose the machine status.')
+    flagged=[label for key,label in DOWNTIME_SECTIONS if ALERT_PHI.search(fields[key])]
+    if flagged:raise ValueError('Remove patient identifiers (names, MRNs, birth dates) from: '+', '.join(flagged)+'.')
+    fields['reported_by']=fields['reported_by'].upper()[:12]
+    fields['when']=None
+    if fields['started']:
+        try:fields['when']=datetime.fromisoformat(fields['started']);fields['started']=fields['when'].strftime('%m/%d/%Y %H:%M')
+        except ValueError:pass
+    return fields
+
+def build_downtime_alert(payload,recipients,sender,now):
+    fields=downtime_fields(payload)
+    recipients=alert_recipients(payload.get('recipients'),recipients)
+    # Header format staff use: DOWNTIME ALERT: Truebeam 9/12 @10am (downtime start, or send time if blank).
+    subject='DOWNTIME ALERT: '+(fields['site'] or 'Truebeam')+' '+alert_time(fields['when'] or now)
+    text=[subject,'']
+    color={'Machine down':'#b42318','Limited use':'#b54708','Back in service':'#0f5128'}[fields['status']]
+    body=['<p style="font-family:Arial;font-size:22px;font-weight:bold;color:'+color+'">'+html.escape(subject)+'</p>']
+    for key,label in DOWNTIME_SECTIONS:
+        value=fields[key] or '-'
+        text+=[label+':',value,''];body.append('<p style="font-family:Arial;font-size:16px;margin:0 0 14px"><b>'+html.escape(label)+':</b><br>'+html.escape(value).replace('\n','<br>')+'</p>')
+    footer='Sent from the TrueBeam Service Log on '+socket.gethostname()+'. Reply to this email with updates.'
     text.append(footer);body.append('<p style="font-family:Arial;color:#555;font-size:12px">'+html.escape(footer)+'</p>')
     message=EmailMessage();message['Subject']=subject;message['To']=', '.join(recipients)
     if sender:message['From']=sender

@@ -12,12 +12,15 @@ Entries marked **[Physics review]** change clinical workflow or what gets record
 Merged to `main` and pushed after v1.4.4. Release downloads have not been rebuilt yet.
 
 ### Added
+- **[Physics review]** Send Downtime Alert button: a scripted email (Site/Machine, status, Issue, Vendor Actions, Patient Impact, Plan, Physics Impact) prefilled from today's console screenshot fault, with a subject like "DOWNTIME ALERT: Truebeam 9/12 @10am". It is sent to its own saved recipient list (Folder settings > Downtime alert recipients, separate from the evening email), which can be edited per alert, with an Open in email app fallback. No field is required. It refuses obvious patient identifiers.
 - Scheduled evening summary email sent from the host computer, with an on/off switch and a recipient list in folder settings.
 - If no SMTP mail server is configured, the evening email is sent through classic Outlook running on the host.
 - The evening email includes every table column plus the five most recent faults, under the title "UF TB MACHINE LOG".
 
 ### Changed
-- **[Physics review]** Fault Reports columns are now Varian Suggested Solution, Resolution/Fix, Initials, and a new Status column (Open or Resolved, shown amber or green) in the app, Excel logs, table downloads, and the evening email. Faults show as Open until someone marks them Resolved.
+- Export Report saves a fresh Excel log of the current entries straight to the Downloads folder.
+- Import Varian work orders moved from the toolbar to Folder settings.
+- **[Physics review]** Fault Reports columns are now Varian Suggested Solution, a new free-text Current Status, Final Resolution (formerly Resolution), Initials, and a new Status column (Open or Resolved, shown amber or green) in the app, Excel logs, table downloads, and the evening email. Faults show as Open until someone marks them Resolved.
 - Larger text in the report tables and Excel logs. Excel logs print landscape, fitted to one page wide, with the header row repeated; the app has a Print (landscape) button.
 - **[Physics review]** Every screenshot is now logged, and screenshots taken within the same five-minute window are grouped into one fault.
 - The connection indicator shows a steady "connected" status instead of flashing while it scans.
